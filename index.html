@@ -693,12 +693,15 @@ function escHtml(str) {
 }
 
 function today() {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' }); // YYYY-MM-DD
 }
 
 function nowStamp() {
+  // Returns YYYY-MM-DD_HH-MM in Singapore time, safe for filenames
   const d = new Date();
-  return d.toISOString().replace('T', '_').substring(0, 16).replace(':', '-');
+  const sg = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));
+  const pad = n => String(n).padStart(2, '0');
+  return `${sg.getFullYear()}-${pad(sg.getMonth()+1)}-${pad(sg.getDate())}_${pad(sg.getHours())}-${pad(sg.getMinutes())}`;
 }
 
 function getCategories(stock) {
@@ -728,7 +731,8 @@ function thHtml(label, key, viewKey) {
 function toggleSort(viewKey, key) {
   const s = sortState[viewKey] || {};
   sortState[viewKey] = { key, dir: (s.key === key && s.dir === 'asc') ? 'desc' : 'asc' };
-  showView(viewKey === 'stock' ? 'stock' : viewKey === 'stocktake' ? 'stocktake' : 'restock');
+  const map = { stock: renderStockTable, stocktake: renderStockTakeTable, restock: renderRestockTable, history: renderHistoryTable };
+  if (map[viewKey]) map[viewKey]();
 }
 
 // ── View Stock ─────────────────────────────────────────────────────────────
@@ -741,6 +745,7 @@ function renderStock() {
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">All Stock Items</h1>
+      <button class="btn btn-secondary" onclick="exportStockCSV()">⬇️ Export Stock</button>
     </div>
     <div class="stats-row">
       <div class="stat-card">
@@ -1304,25 +1309,37 @@ function renderHistoryTable() {
   `;
 }
 
-function parseChangesCSV(text) {
-  const lines   = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  return lines.slice(1).map(line => {
-    // Handle quoted fields properly
-    const vals = [];
-    let cur = '', inQ = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') { inQ = !inQ; }
-      else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
-      else { cur += ch; }
+function parseCSVLine(line) {
+  // RFC 4180-compliant: handles quoted fields that may contain commas or newlines
+  const vals = [];
+  let cur = '', inQ = false, i = 0;
+  while (i < line.length) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i += 2; } // escaped quote ""
+        else { inQ = false; i++; }                        // closing quote
+      } else { cur += ch; i++; }
+    } else {
+      if (ch === '"') { inQ = true; i++; }
+      else if (ch === ',') { vals.push(cur.trim()); cur = ''; i++; }
+      else { cur += ch; i++; }
     }
-    vals.push(cur.trim());
+  }
+  vals.push(cur.trim());
+  return vals;
+}
+
+function parseChangesCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
+  return lines.slice(1).map(line => {
+    const vals = parseCSVLine(line);
     const obj = {};
-    headers.forEach((h, i) => obj[h] = vals[i] || '');
+    headers.forEach((h, i) => obj[h] = vals[i] !== undefined ? vals[i] : '');
     return obj;
-  }).filter(r => r.Item);
+  }).filter(r => r.Item && r.Item.trim());
 }
 
 function loadHistoryFile(event) {
@@ -1345,8 +1362,9 @@ function readHistoryFile(file) {
     const rows = parseChangesCSV(e.target.result);
     if (rows.length === 0) { showToast('No valid data found in this file.', 3500); return; }
     const required = ['Item', 'PreviousQty', 'NewQty'];
-    if (!required.every(k => Object.keys(rows[0]).includes(k))) {
-      showToast('This doesn\'t look like a changes CSV. Make sure you\'re uploading a changes_… file.', 4000);
+    const missing = required.filter(k => !(k in rows[0]));
+    if (missing.length > 0) {
+      showToast(`Missing columns: ${missing.join(', ')}. Upload a changes_… CSV from a stock take.`, 4500);
       return;
     }
     historyRows    = rows;
@@ -1380,6 +1398,14 @@ function downloadCSV(content, filename) {
   const a    = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportStockCSV() {
+  const stock = loadStock();
+  if (stock.length === 0) { showToast('No stock data to export.'); return; }
+  const filename = `stock_${nowStamp()}.csv`;
+  downloadCSV(toCSV(stock, ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']), filename);
+  showToast(`⬇️ Exported as ${filename}`);
 }
 
 // ── Close modals on overlay click ─────────────────────────────────────────
