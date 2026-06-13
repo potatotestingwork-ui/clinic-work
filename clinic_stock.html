@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clinic Stock">
+<title>Clinic Stock Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<style>
+  /* ── Reset & Base ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #F8FAFC;
+    --sidebar:    #1E3A5F;
+    --accent:     #2C4F7A;
+    --white:      #FFFFFF;
+    --black:      #000000;
+    --warn:       #F59E0B;
+    --warn-bg:    #FFFBEB;
+    --green:      #2E7D32;
+    --green-bg:   #F0FFF4;
+    --header-bg:  #1E3A5F;
+    --header-fg:  #FFFFFF;
+    --row-a:      #FFFFFF;
+    --row-b:      #F0F4F8;
+    --placeholder:#999999;
+    --text:       #111827;
+    --text-muted: #6B7280;
+    --border:     #D1D5DB;
+    --red:        #DC2626;
+    --red-bg:     #FEF2F2;
+    --radius:     10px;
+    --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+  }
+
+  html, body {
+    height: 100%;
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────────────── */
+  .app {
+    display: flex;
+    height: 100vh;
+    height: -webkit-fill-available;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────── */
+  .sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: var(--sidebar);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow-y: auto;
+    z-index: 10;
+  }
+
+  .sidebar-header {
+    padding: 32px 24px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .sidebar-logo {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 6px;
+  }
+
+  .sidebar-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.2;
+  }
+
+  .sidebar-nav {
+    padding: 16px 12px;
+    flex: 1;
+  }
+
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 16px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: rgba(255,255,255,0.75);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s, color 0.15s;
+    margin-bottom: 4px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .nav-btn:hover, .nav-btn.active {
+    background: rgba(255,255,255,0.12);
+    color: var(--white);
+  }
+
+  .nav-btn.active {
+    background: rgba(255,255,255,0.18);
+    font-weight: 600;
+  }
+
+  .nav-icon { font-size: 18px; width: 22px; text-align: center; }
+
+  .sidebar-footer {
+    padding: 16px 12px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .nav-btn.settings-btn { color: rgba(255,255,255,0.6); }
+
+  /* ── Main content ─────────────────────────────────────────────────── */
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 32px 32px 48px;
+    background: var(--bg);
+  }
+
+  /* ── Page header ─────────────────────────────────────────────────── */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .page-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--sidebar);
+    line-height: 1.2;
+  }
+
+  /* ── Cards ────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  /* ── Filters bar ─────────────────────────────────────────────────── */
+  .filters-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 11px 12px 11px 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--white);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-input:focus { border-color: var(--accent); }
+
+  .filter-select {
+    padding: 11px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--white);
+    outline: none;
+    cursor: pointer;
+    min-width: 160px;
+    transition: border-color 0.15s;
+  }
+
+  .filter-select:focus { border-color: var(--accent); }
+
+  /* ── Table ────────────────────────────────────────────────────────── */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+
+  thead th {
+    background: var(--header-bg);
+    color: var(--header-fg);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 13px 16px;
+    text-align: left;
+    white-space: nowrap;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  thead th.sortable { cursor: pointer; }
+  thead th.sortable:hover { background: var(--accent); }
+
+  .sort-indicator { margin-left: 6px; opacity: 0.6; font-size: 11px; }
+  thead th.sort-asc .sort-indicator::after  { content: "▲"; opacity: 1; }
+  thead th.sort-desc .sort-indicator::after { content: "▼"; opacity: 1; }
+  thead th:not(.sort-asc):not(.sort-desc) .sort-indicator::after { content: "⇅"; }
+
+  tbody tr:nth-child(odd)  { background: var(--row-a); }
+  tbody tr:nth-child(even) { background: var(--row-b); }
+  tbody tr:hover { background: #E8EFF7; }
+
+  tbody td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  .qty-cell { font-weight: 600; }
+  .qty-low  { color: var(--red); }
+  .qty-ok   { color: var(--green); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .badge-warn { background: var(--warn-bg); color: #92400E; }
+  .badge-ok   { background: var(--green-bg); color: #166534; }
+
+  /* ── Action buttons in table ─────────────────────────────────────── */
+  .row-actions { display: flex; gap: 8px; }
+
+  .btn-icon {
+    padding: 7px 12px;
+    border-radius: 6px;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn-icon:hover { opacity: 0.85; }
+  .btn-edit   { background: var(--accent); color: var(--white); }
+  .btn-delete { background: var(--red-bg); color: var(--red); }
+
+  /* ── Primary buttons ─────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 22px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .btn:active { transform: scale(0.98); }
+  .btn-primary   { background: var(--sidebar); color: var(--white); }
+  .btn-secondary { background: var(--row-b);   color: var(--text); border: 1.5px solid var(--border); }
+  .btn-danger    { background: var(--red);      color: var(--white); }
+  .btn:hover { opacity: 0.88; }
+
+  /* ── Form ─────────────────────────────────────────────────────────── */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  @media (max-width: 700px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+
+  label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .form-input, .form-select {
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--white);
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+
+  .form-input:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(44,79,122,0.1); }
+  .form-input.error { border-color: var(--red); }
+
+  .form-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Stock take grid ─────────────────────────────────────────────── */
+  .stock-take-table input {
+    padding: 9px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .stock-take-table input:focus { border-color: var(--accent); }
+
+  .changed-row { background: #EEF4FF !important; }
+
+  /* ── Modal ────────────────────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    backdrop-filter: blur(2px);
+  }
+
+  .modal-overlay.hidden { display: none; }
+
+  .modal {
+    background: var(--white);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    padding: 28px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--sidebar);
+    margin-bottom: 20px;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    justify-content: flex-end;
+  }
+
+  /* ── Alerts ───────────────────────────────────────────────────────── */
+  .alert {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 20px;
+  }
+
+  .alert-warn  { background: var(--warn-bg);  color: #92400E; border: 1px solid #FDE68A; }
+  .alert-ok    { background: var(--green-bg); color: #166534; border: 1px solid #BBF7D0; }
+  .alert-info  { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+
+  /* ── Settings ─────────────────────────────────────────────────────── */
+  .settings-section { margin-bottom: 28px; }
+  .settings-section h3 { font-size: 16px; font-weight: 700; color: var(--sidebar); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+  .gdrive-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    background: var(--row-b);
+    border: 1px solid var(--border);
+    margin-bottom: 14px;
+    font-size: 14px;
+  }
+
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-dot.connected    { background: var(--green); }
+  .status-dot.disconnected { background: #9CA3AF; }
+
+  .config-grid { display: grid; gap: 14px; }
+
+  /* ── Empty state ─────────────────────────────────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 32px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .empty-state p  { font-size: 15px; }
+
+  /* ── Stats row ────────────────────────────────────────────────────── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    text-align: center;
+  }
+
+  .stat-value { font-size: 32px; font-weight: 700; color: var(--sidebar); }
+  .stat-label { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-top: 4px; }
+  .stat-card.warn .stat-value { color: var(--red); }
+
+  /* ── Toast ────────────────────────────────────────────────────────── */
+  .toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: #1F2937;
+    color: var(--white);
+    padding: 14px 24px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 500;
+    z-index: 9999;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── Utility ─────────────────────────────────────────────────────── */
+  .hidden { display: none !important; }
+  .text-muted { color: var(--text-muted); font-size: 13px; }
+  .mt-4 { margin-top: 16px; }
+  .divider { height: 1px; background: var(--border); margin: 24px 0; }
+  .staff-name-bar {
+    background: var(--accent);
+    color: var(--white);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏥 Clinic</div>
+      <div class="sidebar-title">Stock Manager</div>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-btn active" onclick="showView('stock')" id="nav-stock">
+        <span class="nav-icon">📋</span> View Stock
+      </button>
+      <button class="nav-btn" onclick="showView('add')" id="nav-add">
+        <span class="nav-icon">➕</span> Add Item
+      </button>
+      <button class="nav-btn" onclick="showView('stocktake')" id="nav-stocktake">
+        <span class="nav-icon">🔢</span> Stock Take
+      </button>
+      <button class="nav-btn" onclick="showView('restock')" id="nav-restock">
+        <span class="nav-icon">⚠️</span> Restock Report
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="nav-btn settings-btn" onclick="showView('settings')" id="nav-settings">
+        <span class="nav-icon">⚙️</span> Settings
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Main ─────────────────────────────────────────────────────── -->
+  <main class="main" id="main-content"></main>
+</div>
+
+<!-- ── Edit Modal ──────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">✏️ Edit Item</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Item Name</label>
+        <input class="form-input" id="edit-item" type="text">
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <input class="form-input" id="edit-category" type="text">
+      </div>
+      <div class="form-group">
+        <label>Current Quantity</label>
+        <input class="form-input" id="edit-qty" type="number" min="0">
+      </div>
+      <div class="form-group">
+        <label>Minimum Stock Level</label>
+        <input class="form-input" id="edit-minqty" type="number" min="0">
+      </div>
+      <div class="form-group full">
+        <label>Unit</label>
+        <input class="form-input" id="edit-unit" type="text" placeholder="e.g. box, vial, pcs">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete Modal ────────────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="delete-modal">
+  <div class="modal">
+    <div class="modal-title">🗑️ Delete Item</div>
+    <p style="color:var(--text-muted);font-size:15px;line-height:1.6;">
+      Are you sure you want to delete <strong id="delete-item-name"></strong>?
+      This cannot be undone.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Staff Name Modal (Stock Take) ─────────────────────────────── -->
+<div class="modal-overlay hidden" id="staff-modal">
+  <div class="modal">
+    <div class="modal-title">👤 Who is doing this stock take?</div>
+    <div class="form-group">
+      <label>Staff Name</label>
+      <input class="form-input" id="staff-name-input" type="text" placeholder="e.g. Sarah" autocomplete="off">
+      <div class="form-hint">Your name will appear on the saved change log.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeStaffModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmStaffAndSave()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ───────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Storage ────────────────────────────────────────────────────────────────
+const STOCK_KEY   = 'clinic_stock_v1';
+const CONFIG_KEY  = 'clinic_config_v1';
+
+function loadStock() {
+  try { return JSON.parse(localStorage.getItem(STOCK_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveStock(data) {
+  localStorage.setItem(STOCK_KEY, JSON.stringify(data));
+}
+
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function saveConfig(cfg) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ── Nav ────────────────────────────────────────────────────────────────────
+let currentView = 'stock';
+
+function showView(view) {
+  currentView = view;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const nb = document.getElementById('nav-' + view);
+  if (nb) nb.classList.add('active');
+  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, settings: renderSettings };
+  if (renders[view]) renders[view]();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function nowStamp() {
+  const d = new Date();
+  return d.toISOString().replace('T', '_').substring(0, 16).replace(':', '-');
+}
+
+function getCategories(stock) {
+  return [...new Set(stock.map(s => s.Category).filter(Boolean))].sort();
+}
+
+// Sort state
+let sortState = {};
+
+function sortData(data, key, dir) {
+  return [...data].sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (!isNaN(Number(av)) && !isNaN(Number(bv))) { av = Number(av); bv = Number(bv); }
+    else { av = String(av).toLowerCase(); bv = String(bv).toLowerCase(); }
+    if (av < bv) return dir === 'asc' ? -1 : 1;
+    if (av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+function thHtml(label, key, viewKey) {
+  const s = sortState[viewKey] || {};
+  const cls = s.key === key ? (s.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+  return `<th class="sortable ${cls}" onclick="toggleSort('${viewKey}','${key}')">${label}<span class="sort-indicator"></span></th>`;
+}
+
+function toggleSort(viewKey, key) {
+  const s = sortState[viewKey] || {};
+  sortState[viewKey] = { key, dir: (s.key === key && s.dir === 'asc') ? 'desc' : 'asc' };
+  showView(viewKey === 'stock' ? 'stock' : viewKey === 'stocktake' ? 'stocktake' : 'restock');
+}
+
+// ── View Stock ─────────────────────────────────────────────────────────────
+function renderStock() {
+  const stock = loadStock();
+  const cats = getCategories(stock);
+  const total = stock.length;
+  const low = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty)).length;
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">All Stock Items</h1>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">${total}</div>
+        <div class="stat-label">Total Items</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">${cats.length}</div>
+        <div class="stat-label">Categories</div>
+      </div>
+      <div class="stat-card ${low > 0 ? 'warn' : ''}">
+        <div class="stat-value">${low}</div>
+        <div class="stat-label">Low Stock</div>
+      </div>
+    </div>
+    <div class="filters-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="stock-search" type="text" placeholder="Search items…" oninput="renderStockTable()" autocomplete="off">
+      </div>
+      <select class="filter-select" id="stock-cat" onchange="renderStockTable()">
+        <option value="">All Categories</option>
+        ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap" id="stock-table-wrap"></div>
+    </div>
+  `;
+  renderStockTable();
+}
+
+function renderStockTable() {
+  let stock = loadStock();
+  const search = (document.getElementById('stock-search')?.value || '').toLowerCase();
+  const cat    = document.getElementById('stock-cat')?.value || '';
+
+  if (search) stock = stock.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
+  if (cat)    stock = stock.filter(s => s.Category === cat);
+
+  const s = sortState['stock'];
+  if (s) stock = sortData(stock, s.key, s.dir);
+
+  const wrap = document.getElementById('stock-table-wrap');
+  if (!wrap) return;
+
+  if (stock.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><h3>No items found</h3><p>Try adjusting your search or add some stock.</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          ${thHtml('Item', 'Item', 'stock')}
+          ${thHtml('Category', 'Category', 'stock')}
+          ${thHtml('Qty', 'Qty', 'stock')}
+          ${thHtml('Min Qty', 'MinQty', 'stock')}
+          <th>Unit</th>
+          ${thHtml('Last Updated', 'LastUpdated', 'stock')}
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${stock.map((s, i) => {
+          const isLow = parseInt(s.Qty) < parseInt(s.MinQty);
+          const originalIdx = loadStock().findIndex(o => o.Item === s.Item && o.Category === s.Category);
+          return `<tr>
+            <td><strong>${escHtml(s.Item)}</strong></td>
+            <td>${escHtml(s.Category)}</td>
+            <td class="qty-cell ${isLow ? 'qty-low' : 'qty-ok'}">${escHtml(s.Qty)}</td>
+            <td>${escHtml(s.MinQty)}</td>
+            <td class="text-muted">${escHtml(s.Unit)}</td>
+            <td class="text-muted">${escHtml(s.LastUpdated || '—')}</td>
+            <td><span class="badge ${isLow ? 'badge-warn' : 'badge-ok'}">${isLow ? '⚠️ Low' : '✅ OK'}</span></td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-icon btn-edit" onclick="openEditModal(${originalIdx})">Edit</button>
+                <button class="btn-icon btn-delete" onclick="openDeleteModal(${originalIdx})">Delete</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── Add Item ───────────────────────────────────────────────────────────────
+function renderAdd() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">Add New Item</h1>
+    </div>
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="a-item">Item Name</label>
+          <input class="form-input" id="a-item" type="text" placeholder="e.g. Nitrile Gloves" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="a-cat">Category</label>
+          <input class="form-input" id="a-cat" type="text" placeholder="e.g. PPE, Meds, Consumables" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="a-qty">Current Quantity</label>
+          <input class="form-input" id="a-qty" type="number" min="0" placeholder="e.g. 100">
+        </div>
+        <div class="form-group">
+          <label for="a-minqty">Minimum Stock Level</label>
+          <input class="form-input" id="a-minqty" type="number" min="0" placeholder="e.g. 20">
+        </div>
+        <div class="form-group full">
+          <label for="a-unit">Unit</label>
+          <input class="form-input" id="a-unit" type="text" placeholder="e.g. box, vial, pcs" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-actions mt-4">
+        <button class="btn btn-primary" onclick="submitAdd()">➕ Add Item</button>
+        <button class="btn btn-secondary" onclick="showView('stock')">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function submitAdd() {
+  const item   = document.getElementById('a-item').value.trim();
+  const cat    = document.getElementById('a-cat').value.trim();
+  const qty    = document.getElementById('a-qty').value.trim();
+  const minqty = document.getElementById('a-minqty').value.trim();
+  const unit   = document.getElementById('a-unit').value.trim();
+
+  if (!item)   { document.getElementById('a-item').classList.add('error');   return; }
+  if (!cat)    { document.getElementById('a-cat').classList.add('error');    return; }
+  if (qty === '') { document.getElementById('a-qty').classList.add('error'); return; }
+  if (minqty === '') { document.getElementById('a-minqty').classList.add('error'); return; }
+  if (!unit)   { document.getElementById('a-unit').classList.add('error');   return; }
+
+  const stock = loadStock();
+  stock.push({ Item: item, Category: cat, Qty: parseInt(qty), MinQty: parseInt(minqty), Unit: unit, LastUpdated: today() });
+  saveStock(stock);
+  showToast(`✅ "${item}" added`);
+  showView('stock');
+}
+
+// ── Stock Take ─────────────────────────────────────────────────────────────
+let stockTakeEntries = [];
+
+function renderStockTake() {
+  let stock = loadStock();
+  const cats = getCategories(stock);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">Stock Take</h1>
+      <button class="btn btn-primary" onclick="openStaffModal()">💾 Save Stock Take</button>
+    </div>
+    <div class="alert alert-info">
+      📝 Enter the new counts for items you have checked. Leave blank to keep the current quantity. Changed rows will be highlighted.
+    </div>
+    <div class="filters-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="st-search" type="text" placeholder="Search items…" oninput="renderStockTakeTable()" autocomplete="off">
+      </div>
+      <select class="filter-select" id="st-cat" onchange="renderStockTakeTable()">
+        <option value="">All Categories</option>
+        ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap" id="st-table-wrap"></div>
+    </div>
+  `;
+
+  // Init entries
+  stockTakeEntries = stock.map(() => '');
+  renderStockTakeTable();
+}
+
+function renderStockTakeTable() {
+  let stock = loadStock();
+  const search = (document.getElementById('st-search')?.value || '').toLowerCase();
+  const cat    = document.getElementById('st-cat')?.value || '';
+
+  let filtered = stock.map((s, i) => ({ ...s, _origIdx: i }));
+  if (search) filtered = filtered.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
+  if (cat)    filtered = filtered.filter(s => s.Category === cat);
+
+  const sv = sortState['stocktake'];
+  if (sv) filtered = sortData(filtered, sv.key, sv.dir);
+
+  const wrap = document.getElementById('st-table-wrap');
+  if (!wrap) return;
+
+  if (filtered.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><h3>No items found</h3><p>Try adjusting your filters.</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table class="stock-take-table">
+      <thead>
+        <tr>
+          ${thHtml('Item', 'Item', 'stocktake')}
+          ${thHtml('Category', 'Category', 'stocktake')}
+          ${thHtml('Current Qty', 'Qty', 'stocktake')}
+          <th>Unit</th>
+          <th>New Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filtered.map(s => {
+          const oi = s._origIdx;
+          const val = stockTakeEntries[oi] || '';
+          const changed = val !== '' && parseInt(val) !== parseInt(s.Qty);
+          return `<tr class="${changed ? 'changed-row' : ''}">
+            <td><strong>${escHtml(s.Item)}</strong></td>
+            <td>${escHtml(s.Category)}</td>
+            <td class="qty-cell">${escHtml(s.Qty)} </td>
+            <td class="text-muted">${escHtml(s.Unit)}</td>
+            <td>
+              <input type="number" min="0"
+                value="${escHtml(val)}"
+                placeholder="—"
+                onchange="stockTakeEntries[${oi}] = this.value; renderStockTakeTable()"
+                oninput="stockTakeEntries[${oi}] = this.value;">
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function openStaffModal() {
+  document.getElementById('staff-name-input').value = '';
+  document.getElementById('staff-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('staff-name-input').focus(), 100);
+}
+
+function closeStaffModal() {
+  document.getElementById('staff-modal').classList.add('hidden');
+}
+
+function confirmStaffAndSave() {
+  const name = document.getElementById('staff-name-input').value.trim();
+  if (!name) {
+    document.getElementById('staff-name-input').classList.add('error');
+    return;
+  }
+  closeStaffModal();
+  saveStockTake(name);
+}
+
+function saveStockTake(staffName) {
+  const stock = loadStock();
+  const changes = [];
+  let updated = 0;
+
+  stock.forEach((s, i) => {
+    const val = stockTakeEntries[i];
+    if (val !== '' && val !== null && val !== undefined) {
+      const newQty = parseInt(val);
+      if (!isNaN(newQty)) {
+        changes.push({
+          Item: s.Item,
+          Category: s.Category,
+          PreviousQty: s.Qty,
+          NewQty: newQty,
+          Unit: s.Unit,
+          UpdatedBy: staffName,
+          UpdatedAt: new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })
+        });
+        s.Qty = newQty;
+        s.LastUpdated = today();
+        s.LastUpdatedBy = staffName;
+        updated++;
+      }
+    }
+  });
+
+  if (updated === 0) {
+    showToast('No changes to save.', 2500);
+    return;
+  }
+
+  saveStock(stock);
+  stockTakeEntries = stock.map(() => '');
+
+  const fullCsv    = toCSV(stock, ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']);
+  const changesCsv = toCSV(changes, ['Item','Category','PreviousQty','NewQty','Unit','UpdatedBy','UpdatedAt']);
+
+  const stamp = nowStamp();
+  const fullName    = `stock_${today()}.csv`;
+  const changesName = `changes_${stamp}_${staffName.replace(/\s+/g,'_')}.csv`;
+
+  const cfg = loadConfig();
+  if (cfg.gdriveAccessToken) {
+    uploadToDrive(fullCsv, fullName, cfg.gdriveAccessToken);
+    uploadToDrive(changesCsv, changesName, cfg.gdriveAccessToken);
+    showToast(`✅ ${updated} item(s) saved — uploading to Drive…`);
+  } else {
+    downloadCSV(fullCsv, fullName);
+    downloadCSV(changesCsv, changesName);
+    showToast(`✅ ${updated} item(s) saved — CSVs downloaded`);
+  }
+  showView('stock');
+}
+
+// ── Restock Report ─────────────────────────────────────────────────────────
+function renderRestock() {
+  let stock = loadStock();
+  const cats = getCategories(stock);
+  const low  = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty));
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">Restock Report</h1>
+    </div>
+    ${low.length === 0
+      ? `<div class="alert alert-ok">✅ All items are above their minimum stock levels. Nothing to restock.</div>`
+      : `<div class="alert alert-warn">⚠️ ${low.length} item(s) need restocking.</div>`
+    }
+    ${low.length > 0 ? `
+    <div class="filters-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="rs-search" type="text" placeholder="Search items…" oninput="renderRestockTable()" autocomplete="off">
+      </div>
+      <select class="filter-select" id="rs-cat" onchange="renderRestockTable()">
+        <option value="">All Categories</option>
+        ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap" id="rs-table-wrap"></div>
+    </div>` : ''}
+  `;
+  if (low.length > 0) renderRestockTable();
+}
+
+function renderRestockTable() {
+  const stock  = loadStock();
+  const search = (document.getElementById('rs-search')?.value || '').toLowerCase();
+  const cat    = document.getElementById('rs-cat')?.value || '';
+
+  let low = stock
+    .filter(s => parseInt(s.Qty) < parseInt(s.MinQty))
+    .map(s => ({
+      Item: s.Item,
+      Category: s.Category,
+      Have: `${s.Qty} ${s.Unit}`,
+      'Need (Min)': `${s.MinQty} ${s.Unit}`,
+      'Order Qty': `${parseInt(s.MinQty) - parseInt(s.Qty)} ${s.Unit}`,
+      _have: parseInt(s.Qty),
+      _min: parseInt(s.MinQty)
+    }));
+
+  if (search) low = low.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
+  if (cat)    low = low.filter(s => s.Category === cat);
+
+  const sv = sortState['restock'];
+  if (sv) low = sortData(low, sv.key, sv.dir);
+
+  const wrap = document.getElementById('rs-table-wrap');
+  if (!wrap) return;
+
+  if (low.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          ${thHtml('Item', 'Item', 'restock')}
+          ${thHtml('Category', 'Category', 'restock')}
+          <th>Have</th>
+          <th>Need (Min)</th>
+          <th>Order Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${low.map(s => `<tr>
+          <td><strong>${escHtml(s.Item)}</strong></td>
+          <td>${escHtml(s.Category)}</td>
+          <td class="qty-cell qty-low">${escHtml(s.Have)}</td>
+          <td>${escHtml(s['Need (Min)'])}</td>
+          <td><strong>${escHtml(s['Order Qty'])}</strong></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── Edit Modal ─────────────────────────────────────────────────────────────
+let editIdx = -1;
+
+function openEditModal(idx) {
+  const stock = loadStock();
+  const s = stock[idx];
+  editIdx = idx;
+  document.getElementById('edit-item').value    = s.Item;
+  document.getElementById('edit-category').value = s.Category;
+  document.getElementById('edit-qty').value     = s.Qty;
+  document.getElementById('edit-minqty').value  = s.MinQty;
+  document.getElementById('edit-unit').value    = s.Unit;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+  editIdx = -1;
+}
+
+function saveEdit() {
+  const item   = document.getElementById('edit-item').value.trim();
+  const cat    = document.getElementById('edit-category').value.trim();
+  const qty    = parseInt(document.getElementById('edit-qty').value);
+  const minqty = parseInt(document.getElementById('edit-minqty').value);
+  const unit   = document.getElementById('edit-unit').value.trim();
+
+  if (!item || !cat || isNaN(qty) || isNaN(minqty) || !unit) {
+    showToast('Please fill in all fields.'); return;
+  }
+
+  const stock = loadStock();
+  stock[editIdx] = { ...stock[editIdx], Item: item, Category: cat, Qty: qty, MinQty: minqty, Unit: unit, LastUpdated: today() };
+  saveStock(stock);
+  closeEditModal();
+  showToast(`✅ "${item}" updated`);
+  renderStock();
+}
+
+// ── Delete Modal ───────────────────────────────────────────────────────────
+let deleteIdx = -1;
+
+function openDeleteModal(idx) {
+  const stock = loadStock();
+  deleteIdx = idx;
+  document.getElementById('delete-item-name').textContent = stock[idx].Item;
+  document.getElementById('delete-modal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+  document.getElementById('delete-modal').classList.add('hidden');
+  deleteIdx = -1;
+}
+
+function confirmDelete() {
+  const stock = loadStock();
+  const name = stock[deleteIdx].Item;
+  stock.splice(deleteIdx, 1);
+  saveStock(stock);
+  closeDeleteModal();
+  showToast(`🗑️ "${name}" deleted`);
+  renderStock();
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+function renderSettings() {
+  const cfg = loadConfig();
+  const connected = !!cfg.gdriveAccessToken;
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">Settings</h1>
+    </div>
+
+    <div class="card settings-section">
+      <h3>☁️ Google Drive Integration</h3>
+      <div class="gdrive-status">
+        <span class="status-dot ${connected ? 'connected' : 'disconnected'}"></span>
+        <span>${connected ? 'Connected to Google Drive' : 'Not connected'}</span>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:16px;">
+        To connect Google Drive, you need a Google Cloud project with the Drive API enabled.
+        Enter your <strong>Client ID</strong> and <strong>API Key</strong> below, then click Connect.
+        <br><br>
+        <strong>Setup steps:</strong><br>
+        1. Go to <em>console.cloud.google.com</em><br>
+        2. Create a project → Enable "Google Drive API"<br>
+        3. Create an OAuth 2.0 Client ID (Web Application type)<br>
+        4. Add <code>${location.origin}</code> as an authorised JavaScript origin<br>
+        5. Create an API Key and restrict it to Drive API
+      </div>
+      <div class="config-grid">
+        <div class="form-group">
+          <label>Google Client ID</label>
+          <input class="form-input" id="cfg-client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" value="${escHtml(cfg.gdriveClientId || '')}">
+        </div>
+        <div class="form-group">
+          <label>Google API Key</label>
+          <input class="form-input" id="cfg-api-key" type="text" placeholder="AIzaSy..." value="${escHtml(cfg.gdriveApiKey || '')}">
+        </div>
+        <div class="form-group">
+          <label>Upload Folder Name <span class="text-muted">(optional — uploads to root if blank)</span></label>
+          <input class="form-input" id="cfg-folder" type="text" placeholder="e.g. Clinic Stock Backups" value="${escHtml(cfg.gdriveFolderName || '')}">
+        </div>
+      </div>
+      <div class="form-actions mt-4">
+        <button class="btn btn-primary" onclick="saveGDriveConfig()">Save & Connect</button>
+        ${connected ? `<button class="btn btn-secondary" onclick="disconnectGDrive()">Disconnect</button>` : ''}
+      </div>
+    </div>
+
+    <div class="card settings-section">
+      <h3>📦 Data Management</h3>
+      <p class="text-muted" style="margin-bottom:16px;font-size:14px;">
+        Export or import all stock data as CSV. Use this to back up your data or transfer it between devices.
+      </p>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="exportAllCSV()">⬇️ Export Stock CSV</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('import-csv').click()">⬆️ Import Stock CSV</button>
+      </div>
+      <input type="file" id="import-csv" accept=".csv" class="hidden" onchange="importCSV(event)">
+    </div>
+  `;
+}
+
+function saveGDriveConfig() {
+  const clientId = document.getElementById('cfg-client-id').value.trim();
+  const apiKey   = document.getElementById('cfg-api-key').value.trim();
+  const folder   = document.getElementById('cfg-folder').value.trim();
+
+  if (!clientId || !apiKey) { showToast('Please enter both Client ID and API Key.'); return; }
+
+  const cfg = loadConfig();
+  cfg.gdriveClientId   = clientId;
+  cfg.gdriveApiKey     = apiKey;
+  cfg.gdriveFolderName = folder;
+  delete cfg.gdriveAccessToken;
+  saveConfig(cfg);
+
+  initGoogleAuth(clientId, apiKey);
+}
+
+function disconnectGDrive() {
+  const cfg = loadConfig();
+  delete cfg.gdriveAccessToken;
+  saveConfig(cfg);
+  showToast('Disconnected from Google Drive');
+  renderSettings();
+}
+
+// ── Google Drive Auth & Upload ─────────────────────────────────────────────
+function initGoogleAuth(clientId, apiKey) {
+  const script = document.getElementById('gapi-script');
+  if (script) script.remove();
+
+  const s = document.createElement('script');
+  s.id  = 'gapi-script';
+  s.src = 'https://apis.google.com/js/api.js';
+  s.onload = () => {
+    gapi.load('client:auth2', () => {
+      gapi.client.init({
+        apiKey,
+        clientId,
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+        scope: 'https://www.googleapis.com/auth/drive.file'
+      }).then(() => {
+        return gapi.auth2.getAuthInstance().signIn();
+      }).then(() => {
+        const token = gapi.client.getToken().access_token;
+        const cfg = loadConfig();
+        cfg.gdriveAccessToken = token;
+        saveConfig(cfg);
+        showToast('✅ Connected to Google Drive!');
+        renderSettings();
+      }).catch(err => {
+        showToast('Google Drive connection failed. Check your credentials.', 4000);
+        console.error(err);
+      });
+    });
+  };
+  document.body.appendChild(s);
+}
+
+function uploadToDrive(csvContent, filename, accessToken) {
+  const cfg = loadConfig();
+  const boundary = '-------314159265358979323846';
+  const metadata  = JSON.stringify({ name: filename, mimeType: 'text/csv' });
+
+  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: text/csv\r\n\r\n${csvContent}\r\n--${boundary}--`;
+
+  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary="${boundary}"`,
+    },
+    body
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.id) showToast(`☁️ "${filename}" uploaded to Drive`);
+    else {
+      showToast(`Drive upload failed — CSV downloaded locally instead`, 4000);
+      downloadCSV(csvContent, filename);
+    }
+  })
+  .catch(() => {
+    showToast(`Drive upload failed — CSV downloaded locally instead`, 4000);
+    downloadCSV(csvContent, filename);
+  });
+}
+
+// ── CSV helpers ────────────────────────────────────────────────────────────
+function toCSV(rows, fields) {
+  const header = fields.join(',');
+  const lines = rows.map(r =>
+    fields.map(f => {
+      const v = String(r[f] ?? '');
+      return v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g,'""')}"` : v;
+    }).join(',')
+  );
+  return [header, ...lines].join('\r\n');
+}
+
+function downloadCSV(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportAllCSV() {
+  const stock = loadStock();
+  if (stock.length === 0) { showToast('No stock data to export.'); return; }
+  downloadCSV(toCSV(stock, ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']), `stock_export_${today()}.csv`);
+  showToast('⬇️ CSV exported');
+}
+
+function importCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.trim());
+      const required = ['Item','Category','Qty','MinQty','Unit'];
+      if (!required.every(r => headers.includes(r))) {
+        showToast('CSV missing required columns.', 4000); return;
+      }
+      const rows = lines.slice(1).map(l => {
+        const vals = l.split(',');
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = vals[i]?.trim() || '');
+        return obj;
+      }).filter(r => r.Item);
+      saveStock(rows);
+      showToast(`✅ Imported ${rows.length} items`);
+      showView('stock');
+    } catch { showToast('Failed to parse CSV.', 4000); }
+  };
+  reader.readAsText(file);
+}
+
+// ── Close modals on overlay click ─────────────────────────────────────────
+document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeEditModal(); });
+document.getElementById('delete-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDeleteModal(); });
+document.getElementById('staff-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeStaffModal(); });
+
+// ── Init ───────────────────────────────────────────────────────────────────
+showView('stock');
+
+// ── Service Worker (PWA offline support) ──────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
