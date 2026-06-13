@@ -126,13 +126,6 @@
 
   .nav-icon { font-size: 18px; width: 22px; text-align: center; }
 
-  .sidebar-footer {
-    padding: 16px 12px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-  }
-
-  .nav-btn.settings-btn { color: rgba(255,255,255,0.6); }
-
   /* ── Main content ─────────────────────────────────────────────────── */
   .main {
     flex: 1;
@@ -450,33 +443,6 @@
   .alert-ok    { background: var(--green-bg); color: #166534; border: 1px solid #BBF7D0; }
   .alert-info  { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
 
-  /* ── Settings ─────────────────────────────────────────────────────── */
-  .settings-section { margin-bottom: 28px; }
-  .settings-section h3 { font-size: 16px; font-weight: 700; color: var(--sidebar); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-
-  .gdrive-status {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 14px 16px;
-    border-radius: 8px;
-    background: var(--row-b);
-    border: 1px solid var(--border);
-    margin-bottom: 14px;
-    font-size: 14px;
-  }
-
-  .status-dot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .status-dot.connected    { background: var(--green); }
-  .status-dot.disconnected { background: #9CA3AF; }
-
-  .config-grid { display: grid; gap: 14px; }
-
   /* ── Empty state ─────────────────────────────────────────────────── */
   .empty-state {
     display: flex;
@@ -549,6 +515,44 @@
     align-items: center;
     gap: 8px;
   }
+  /* ── History ──────────────────────────────────────────────────────── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--white);
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: #EFF6FF;
+  }
+
+  .drop-zone-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-zone h3   { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .drop-zone p    { font-size: 14px; color: var(--text-muted); }
+
+  .delta-up   { color: var(--red);   font-weight: 700; }
+  .delta-down { color: var(--green); font-weight: 700; }
+  .delta-none { color: var(--text-muted); }
+
+  .history-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 14px 18px;
+    background: var(--row-b);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+
+  .history-meta span { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+  .history-meta strong { color: var(--text); }
 </style>
 </head>
 <body>
@@ -573,10 +577,8 @@
       <button class="nav-btn" onclick="showView('restock')" id="nav-restock">
         <span class="nav-icon">⚠️</span> Restock Report
       </button>
-    </div>
-    <div class="sidebar-footer">
-      <button class="nav-btn settings-btn" onclick="showView('settings')" id="nav-settings">
-        <span class="nav-icon">⚙️</span> Settings
+      <button class="nav-btn" onclick="showView('history')" id="nav-history">
+        <span class="nav-icon">🕓</span> History
       </button>
     </div>
   </nav>
@@ -654,8 +656,7 @@
 
 <script>
 // ── Storage ────────────────────────────────────────────────────────────────
-const STOCK_KEY   = 'clinic_stock_v1';
-const CONFIG_KEY  = 'clinic_config_v1';
+const STOCK_KEY = 'clinic_stock_v1';
 
 function loadStock() {
   try { return JSON.parse(localStorage.getItem(STOCK_KEY)) || []; }
@@ -664,15 +665,6 @@ function loadStock() {
 
 function saveStock(data) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(data));
-}
-
-function loadConfig() {
-  try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; }
-  catch { return {}; }
-}
-
-function saveConfig(cfg) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
@@ -691,7 +683,7 @@ function showView(view) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const nb = document.getElementById('nav-' + view);
   if (nb) nb.classList.add('active');
-  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, settings: renderSettings };
+  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, history: renderHistory };
   if (renders[view]) renders[view]();
 }
 
@@ -1048,16 +1040,9 @@ function saveStockTake(staffName) {
   const fullName    = `stock_${today()}.csv`;
   const changesName = `changes_${stamp}_${staffName.replace(/\s+/g,'_')}.csv`;
 
-  const cfg = loadConfig();
-  if (cfg.gdriveAccessToken) {
-    uploadToDrive(fullCsv, fullName, cfg.gdriveAccessToken);
-    uploadToDrive(changesCsv, changesName, cfg.gdriveAccessToken);
-    showToast(`✅ ${updated} item(s) saved — uploading to Drive…`);
-  } else {
-    downloadCSV(fullCsv, fullName);
-    downloadCSV(changesCsv, changesName);
-    showToast(`✅ ${updated} item(s) saved — CSVs downloaded`);
-  }
+  downloadCSV(fullCsv, fullName);
+  downloadCSV(changesCsv, changesName);
+  showToast(`✅ ${updated} item(s) saved — CSVs downloaded`);
   showView('stock');
 }
 
@@ -1212,152 +1197,169 @@ function confirmDelete() {
   renderStock();
 }
 
-// ── Settings ───────────────────────────────────────────────────────────────
-function renderSettings() {
-  const cfg = loadConfig();
-  const connected = !!cfg.gdriveAccessToken;
+// ── History ────────────────────────────────────────────────────────────────
+let historyRows = [];
+let historyFilename = '';
 
+function renderHistory() {
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
-      <h1 class="page-title">Settings</h1>
+      <h1 class="page-title">History</h1>
+      ${historyRows.length > 0 ? `<button class="btn btn-secondary" onclick="clearHistory()">✕ Clear</button>` : ''}
     </div>
 
-    <div class="card settings-section">
-      <h3>☁️ Google Drive Integration</h3>
-      <div class="gdrive-status">
-        <span class="status-dot ${connected ? 'connected' : 'disconnected'}"></span>
-        <span>${connected ? 'Connected to Google Drive' : 'Not connected'}</span>
-      </div>
-      <div class="alert alert-info" style="margin-bottom:16px;">
-        To connect Google Drive, you need a Google Cloud project with the Drive API enabled.
-        Enter your <strong>Client ID</strong> and <strong>API Key</strong> below, then click Connect.
-        <br><br>
-        <strong>Setup steps:</strong><br>
-        1. Go to <em>console.cloud.google.com</em><br>
-        2. Create a project → Enable "Google Drive API"<br>
-        3. Create an OAuth 2.0 Client ID (Web Application type)<br>
-        4. Add <code>${location.origin}</code> as an authorised JavaScript origin<br>
-        5. Create an API Key and restrict it to Drive API
-      </div>
-      <div class="config-grid">
-        <div class="form-group">
-          <label>Google Client ID</label>
-          <input class="form-input" id="cfg-client-id" type="text" placeholder="xxxx.apps.googleusercontent.com" value="${escHtml(cfg.gdriveClientId || '')}">
+    ${historyRows.length === 0 ? `
+      <div class="card" style="padding:0;">
+        <div class="drop-zone" id="drop-zone"
+          onclick="document.getElementById('history-file-input').click()"
+          ondragover="event.preventDefault(); this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="handleHistoryDrop(event)">
+          <div class="drop-zone-icon">📂</div>
+          <h3>Upload a changes CSV</h3>
+          <p>Tap to choose a file, or drag one in.<br>These are the <code>changes_…csv</code> files saved during a stock take.</p>
         </div>
-        <div class="form-group">
-          <label>Google API Key</label>
-          <input class="form-input" id="cfg-api-key" type="text" placeholder="AIzaSy..." value="${escHtml(cfg.gdriveApiKey || '')}">
-        </div>
-        <div class="form-group">
-          <label>Upload Folder Name <span class="text-muted">(optional — uploads to root if blank)</span></label>
-          <input class="form-input" id="cfg-folder" type="text" placeholder="e.g. Clinic Stock Backups" value="${escHtml(cfg.gdriveFolderName || '')}">
-        </div>
+        <input type="file" id="history-file-input" accept=".csv" class="hidden" onchange="loadHistoryFile(event)">
       </div>
-      <div class="form-actions mt-4">
-        <button class="btn btn-primary" onclick="saveGDriveConfig()">Save & Connect</button>
-        ${connected ? `<button class="btn btn-secondary" onclick="disconnectGDrive()">Disconnect</button>` : ''}
+    ` : `
+      <div class="history-meta">
+        <span>📄 <strong>${escHtml(historyFilename)}</strong></span>
+        <span>🔢 <strong>${historyRows.length}</strong> change${historyRows.length !== 1 ? 's' : ''}</span>
+        ${historyRows[0]?.UpdatedBy ? `<span>👤 <strong>${escHtml(historyRows[0].UpdatedBy)}</strong></span>` : ''}
+        ${historyRows[0]?.UpdatedAt ? `<span>🕓 <strong>${escHtml(historyRows[0].UpdatedAt)}</strong></span>` : ''}
       </div>
-    </div>
+      <div class="filters-bar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="hist-search" type="text" placeholder="Search items…" oninput="renderHistoryTable()" autocomplete="off">
+        </div>
+        <select class="filter-select" id="hist-delta" onchange="renderHistoryTable()">
+          <option value="">All Changes</option>
+          <option value="up">Quantity increased</option>
+          <option value="down">Quantity decreased</option>
+        </select>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="table-wrap" id="hist-table-wrap"></div>
+      </div>
+    `}
+  `;
+  if (historyRows.length > 0) renderHistoryTable();
+}
 
-    <div class="card settings-section">
-      <h3>📦 Data Management</h3>
-      <p class="text-muted" style="margin-bottom:16px;font-size:14px;">
-        Export or import all stock data as CSV. Use this to back up your data or transfer it between devices.
-      </p>
-      <div class="form-actions">
-        <button class="btn btn-secondary" onclick="exportAllCSV()">⬇️ Export Stock CSV</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('import-csv').click()">⬆️ Import Stock CSV</button>
-      </div>
-      <input type="file" id="import-csv" accept=".csv" class="hidden" onchange="importCSV(event)">
-    </div>
+function renderHistoryTable() {
+  const search = (document.getElementById('hist-search')?.value || '').toLowerCase();
+  const deltaFilter = document.getElementById('hist-delta')?.value || '';
+
+  let rows = [...historyRows];
+  if (search) rows = rows.filter(r => r.Item.toLowerCase().includes(search) || (r.Category || '').toLowerCase().includes(search));
+  if (deltaFilter === 'up')   rows = rows.filter(r => parseInt(r.NewQty) > parseInt(r.PreviousQty));
+  if (deltaFilter === 'down') rows = rows.filter(r => parseInt(r.NewQty) < parseInt(r.PreviousQty));
+
+  const sv = sortState['history'];
+  if (sv) rows = sortData(rows, sv.key, sv.dir);
+
+  const wrap = document.getElementById('hist-table-wrap');
+  if (!wrap) return;
+
+  if (rows.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          ${thHtml('Item', 'Item', 'history')}
+          ${thHtml('Category', 'Category', 'history')}
+          ${thHtml('Previous Qty', 'PreviousQty', 'history')}
+          ${thHtml('New Qty', 'NewQty', 'history')}
+          <th>Change</th>
+          <th>Unit</th>
+          ${historyRows[0]?.UpdatedBy ? thHtml('Updated By', 'UpdatedBy', 'history') : ''}
+          ${historyRows[0]?.UpdatedAt ? thHtml('Updated At', 'UpdatedAt', 'history') : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => {
+          const prev  = parseInt(r.PreviousQty);
+          const next  = parseInt(r.NewQty);
+          const delta = next - prev;
+          const deltaClass = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-none';
+          const deltaStr   = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : '— no change';
+          return `<tr>
+            <td><strong>${escHtml(r.Item)}</strong></td>
+            <td>${escHtml(r.Category || '—')}</td>
+            <td class="qty-cell">${escHtml(r.PreviousQty)}</td>
+            <td class="qty-cell">${escHtml(r.NewQty)}</td>
+            <td class="${deltaClass}">${deltaStr}</td>
+            <td class="text-muted">${escHtml(r.Unit || '—')}</td>
+            ${r.UpdatedBy ? `<td>${escHtml(r.UpdatedBy)}</td>` : ''}
+            ${r.UpdatedAt ? `<td class="text-muted">${escHtml(r.UpdatedAt)}</td>` : ''}
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
   `;
 }
 
-function saveGDriveConfig() {
-  const clientId = document.getElementById('cfg-client-id').value.trim();
-  const apiKey   = document.getElementById('cfg-api-key').value.trim();
-  const folder   = document.getElementById('cfg-folder').value.trim();
-
-  if (!clientId || !apiKey) { showToast('Please enter both Client ID and API Key.'); return; }
-
-  const cfg = loadConfig();
-  cfg.gdriveClientId   = clientId;
-  cfg.gdriveApiKey     = apiKey;
-  cfg.gdriveFolderName = folder;
-  delete cfg.gdriveAccessToken;
-  saveConfig(cfg);
-
-  initGoogleAuth(clientId, apiKey);
-}
-
-function disconnectGDrive() {
-  const cfg = loadConfig();
-  delete cfg.gdriveAccessToken;
-  saveConfig(cfg);
-  showToast('Disconnected from Google Drive');
-  renderSettings();
-}
-
-// ── Google Drive Auth & Upload ─────────────────────────────────────────────
-function initGoogleAuth(clientId, apiKey) {
-  const script = document.getElementById('gapi-script');
-  if (script) script.remove();
-
-  const s = document.createElement('script');
-  s.id  = 'gapi-script';
-  s.src = 'https://apis.google.com/js/api.js';
-  s.onload = () => {
-    gapi.load('client:auth2', () => {
-      gapi.client.init({
-        apiKey,
-        clientId,
-        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-        scope: 'https://www.googleapis.com/auth/drive.file'
-      }).then(() => {
-        return gapi.auth2.getAuthInstance().signIn();
-      }).then(() => {
-        const token = gapi.client.getToken().access_token;
-        const cfg = loadConfig();
-        cfg.gdriveAccessToken = token;
-        saveConfig(cfg);
-        showToast('✅ Connected to Google Drive!');
-        renderSettings();
-      }).catch(err => {
-        showToast('Google Drive connection failed. Check your credentials.', 4000);
-        console.error(err);
-      });
-    });
-  };
-  document.body.appendChild(s);
-}
-
-function uploadToDrive(csvContent, filename, accessToken) {
-  const cfg = loadConfig();
-  const boundary = '-------314159265358979323846';
-  const metadata  = JSON.stringify({ name: filename, mimeType: 'text/csv' });
-
-  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: text/csv\r\n\r\n${csvContent}\r\n--${boundary}--`;
-
-  fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': `multipart/related; boundary="${boundary}"`,
-    },
-    body
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.id) showToast(`☁️ "${filename}" uploaded to Drive`);
-    else {
-      showToast(`Drive upload failed — CSV downloaded locally instead`, 4000);
-      downloadCSV(csvContent, filename);
+function parseChangesCSV(text) {
+  const lines   = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).map(line => {
+    // Handle quoted fields properly
+    const vals = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
     }
-  })
-  .catch(() => {
-    showToast(`Drive upload failed — CSV downloaded locally instead`, 4000);
-    downloadCSV(csvContent, filename);
-  });
+    vals.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = vals[i] || '');
+    return obj;
+  }).filter(r => r.Item);
+}
+
+function loadHistoryFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  readHistoryFile(file);
+}
+
+function handleHistoryDrop(event) {
+  event.preventDefault();
+  document.getElementById('drop-zone')?.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (!file || !file.name.endsWith('.csv')) { showToast('Please drop a CSV file.', 3000); return; }
+  readHistoryFile(file);
+}
+
+function readHistoryFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const rows = parseChangesCSV(e.target.result);
+    if (rows.length === 0) { showToast('No valid data found in this file.', 3500); return; }
+    const required = ['Item', 'PreviousQty', 'NewQty'];
+    if (!required.every(k => Object.keys(rows[0]).includes(k))) {
+      showToast('This doesn\'t look like a changes CSV. Make sure you\'re uploading a changes_… file.', 4000);
+      return;
+    }
+    historyRows    = rows;
+    historyFilename = file.name;
+    renderHistory();
+  };
+  reader.readAsText(file);
+}
+
+function clearHistory() {
+  historyRows = [];
+  historyFilename = '';
+  renderHistory();
 }
 
 // ── CSV helpers ────────────────────────────────────────────────────────────
@@ -1378,39 +1380,6 @@ function downloadCSV(content, filename) {
   const a    = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
-}
-
-function exportAllCSV() {
-  const stock = loadStock();
-  if (stock.length === 0) { showToast('No stock data to export.'); return; }
-  downloadCSV(toCSV(stock, ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']), `stock_export_${today()}.csv`);
-  showToast('⬇️ CSV exported');
-}
-
-function importCSV(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
-      const headers = lines[0].split(',').map(h => h.trim());
-      const required = ['Item','Category','Qty','MinQty','Unit'];
-      if (!required.every(r => headers.includes(r))) {
-        showToast('CSV missing required columns.', 4000); return;
-      }
-      const rows = lines.slice(1).map(l => {
-        const vals = l.split(',');
-        const obj = {};
-        headers.forEach((h, i) => obj[h] = vals[i]?.trim() || '');
-        return obj;
-      }).filter(r => r.Item);
-      saveStock(rows);
-      showToast(`✅ Imported ${rows.length} items`);
-      showView('stock');
-    } catch { showToast('Failed to parse CSV.', 4000); }
-  };
-  reader.readAsText(file);
 }
 
 // ── Close modals on overlay click ─────────────────────────────────────────
