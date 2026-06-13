@@ -278,8 +278,10 @@
     font-weight: 600;
   }
 
-  .badge-warn { background: var(--warn-bg); color: #92400E; }
-  .badge-ok   { background: var(--green-bg); color: #166534; }
+  .badge-warn   { background: var(--warn-bg);  color: #92400E; }
+  .badge-ok     { background: var(--green-bg); color: #166534; }
+  .badge-expiry { background: #FFF7ED; color: #9A3412; border: 1px solid #FED7AA; }
+  .badge-red    { background: var(--red-bg);   color: var(--red); }
 
   /* ── Action buttons in table ─────────────────────────────────────── */
   .row-actions { display: flex; gap: 8px; }
@@ -386,6 +388,40 @@
   .stock-take-table input:focus { border-color: var(--accent); }
 
   .changed-row { background: #EEF4FF !important; }
+  .expiry-soon-row { background: #FFF7ED !important; }
+
+  /* ── Restock section tabs ──────────────────────────────────────────── */
+  .section-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .section-tab {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--white);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .section-tab:hover { border-color: var(--accent); color: var(--accent); }
+  .section-tab.active { background: var(--sidebar); border-color: var(--sidebar); color: var(--white); font-weight: 600; }
+  .section-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 20px 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
 
   /* ── Modal ────────────────────────────────────────────────────────── */
   .modal-overlay {
@@ -635,7 +671,7 @@
 
 <!-- ── Edit Modal ──────────────────────────────────────────────────── -->
 <div class="modal-overlay hidden" id="edit-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:560px;">
     <div class="modal-title">✏️ Edit Item</div>
     <div class="form-grid">
       <div class="form-group">
@@ -654,9 +690,26 @@
         <label>Minimum Stock Level</label>
         <input class="form-input" id="edit-minqty" type="number" min="0">
       </div>
-      <div class="form-group full">
+      <div class="form-group">
         <label>Unit</label>
         <input class="form-input" id="edit-unit" type="text" placeholder="e.g. box, vial, pcs">
+      </div>
+      <div class="form-group">
+        <label>Batch Number</label>
+        <input class="form-input" id="edit-batchno" type="text" placeholder="e.g. BN2024-001, LOT-A3X">
+      </div>
+      <div class="form-group">
+        <label>Batch Date</label>
+        <input class="form-input" id="edit-batchdate" type="date">
+      </div>
+      <div class="form-group">
+        <label>Expiry Date</label>
+        <input class="form-input" id="edit-expirydate" type="date">
+      </div>
+      <div class="form-group">
+        <label>Warn Before Expiry (days)</label>
+        <input class="form-input" id="edit-expirywarn" type="number" min="1" placeholder="e.g. 30">
+        <div class="form-hint">Flag this item on the Restock page this many days before expiry.</div>
       </div>
     </div>
     <div class="modal-actions">
@@ -702,7 +755,7 @@
 
 <script>
 // ── Storage ────────────────────────────────────────────────────────────────
-const STOCK_KEY = 'clinic_stock_v1';
+const STOCK_KEY = 'clinic_stock_v2';
 
 function loadStock() {
   try { return JSON.parse(localStorage.getItem(STOCK_KEY)) || []; }
@@ -711,6 +764,37 @@ function loadStock() {
 
 function saveStock(data) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(data));
+}
+
+// ── Expiry helpers ─────────────────────────────────────────────────────────
+function daysUntilExpiry(expiryDateStr) {
+  if (!expiryDateStr) return null;
+  const now    = new Date(); now.setHours(0,0,0,0);
+  const expiry = new Date(expiryDateStr); expiry.setHours(0,0,0,0);
+  return Math.round((expiry - now) / 86400000);
+}
+
+function isExpiringSoon(item) {
+  const days = daysUntilExpiry(item.ExpiryDate);
+  if (days === null) return false;
+  const threshold = parseInt(item.ExpiryWarnDays) || 30;
+  return days <= threshold;
+}
+
+function expiryLabel(item) {
+  const days = daysUntilExpiry(item.ExpiryDate);
+  if (days === null) return '—';
+  if (days < 0)  return `Expired ${Math.abs(days)}d ago`;
+  if (days === 0) return 'Expires today';
+  return `${days}d`;
+}
+
+function expiryBadgeClass(item) {
+  const days = daysUntilExpiry(item.ExpiryDate);
+  if (days === null) return '';
+  if (days < 0)  return 'badge-red';
+  if (isExpiringSoon(item)) return 'badge-expiry';
+  return 'badge-ok';
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
@@ -784,16 +868,17 @@ function toggleSort(viewKey, key) {
 // ── View Stock ─────────────────────────────────────────────────────────────
 function renderStock() {
   const stock = loadStock();
-  const cats = getCategories(stock);
+  const cats  = getCategories(stock);
   const total = stock.length;
-  const low = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty)).length;
+  const low   = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty)).length;
+  const expiring = stock.filter(s => isExpiringSoon(s) || daysUntilExpiry(s.ExpiryDate) < 0).length;
 
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">All Stock Items</h1>
       <button class="btn btn-secondary" onclick="exportStockCSV()">⬇️ Export Stock</button>
     </div>
-    <div class="stats-row">
+    <div class="stats-row" style="grid-template-columns:repeat(4,1fr);">
       <div class="stat-card">
         <div class="stat-value">${total}</div>
         <div class="stat-label">Total Items</div>
@@ -806,6 +891,10 @@ function renderStock() {
         <div class="stat-value">${low}</div>
         <div class="stat-label">Low Stock</div>
       </div>
+      <div class="stat-card ${expiring > 0 ? 'warn' : ''}">
+        <div class="stat-value">${expiring}</div>
+        <div class="stat-label">Expiring / Expired</div>
+      </div>
     </div>
     <div class="filters-bar">
       <div class="search-wrap">
@@ -815,6 +904,13 @@ function renderStock() {
       <select class="filter-select" id="stock-cat" onchange="renderStockTable()">
         <option value="">All Categories</option>
         ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+      </select>
+      <select class="filter-select" id="stock-status" onchange="renderStockTable()">
+        <option value="">All Statuses</option>
+        <option value="ok">✅ OK</option>
+        <option value="low">⚠️ Low Stock</option>
+        <option value="expiring">🕐 Expiring Soon</option>
+        <option value="expired">❌ Expired</option>
       </select>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
@@ -828,9 +924,23 @@ function renderStockTable() {
   let stock = loadStock();
   const search = (document.getElementById('stock-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('stock-cat')?.value || '';
+  const status = document.getElementById('stock-status')?.value || '';
 
   if (search) stock = stock.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
   if (cat)    stock = stock.filter(s => s.Category === cat);
+  if (status) {
+    stock = stock.filter(s => {
+      const isLow  = parseInt(s.Qty) < parseInt(s.MinQty);
+      const days   = daysUntilExpiry(s.ExpiryDate);
+      const expired    = days !== null && days < 0;
+      const expiringSoon = !expired && isExpiringSoon(s);
+      if (status === 'low')      return isLow;
+      if (status === 'expiring') return expiringSoon;
+      if (status === 'expired')  return expired;
+      if (status === 'ok')       return !isLow && !expired && !expiringSoon;
+      return true;
+    });
+  }
 
   const s = sortState['stock'];
   if (s) stock = sortData(stock, s.key, s.dir);
@@ -843,6 +953,8 @@ function renderStockTable() {
     return;
   }
 
+  const allStock = loadStock();
+
   wrap.innerHTML = `
     <table>
       <thead>
@@ -852,23 +964,45 @@ function renderStockTable() {
           ${thHtml('Qty', 'Qty', 'stock')}
           ${thHtml('Min Qty', 'MinQty', 'stock')}
           <th>Unit</th>
+          ${thHtml('Batch No', 'BatchNo', 'stock')}
+          ${thHtml('Batch Date', 'BatchDate', 'stock')}
+          ${thHtml('Expiry Date', 'ExpiryDate', 'stock')}
+          <th>Expires In</th>
           ${thHtml('Last Updated', 'LastUpdated', 'stock')}
           <th>Status</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        ${stock.map((s, i) => {
-          const isLow = parseInt(s.Qty) < parseInt(s.MinQty);
-          const originalIdx = loadStock().findIndex(o => o.Item === s.Item && o.Category === s.Category);
+        ${stock.map(s => {
+          const isLow  = parseInt(s.Qty) < parseInt(s.MinQty);
+          const days   = daysUntilExpiry(s.ExpiryDate);
+          const expired    = days !== null && days < 0;
+          const expiringSoon = !expired && isExpiringSoon(s);
+          const originalIdx = allStock.findIndex(o => o.Item === s.Item && o.Category === s.Category);
+
+          // Build status badge(s)
+          let statusBadges = '';
+          if (isLow)         statusBadges += `<span class="badge badge-warn">⚠️ Low</span> `;
+          if (expired)       statusBadges += `<span class="badge badge-red">❌ Expired</span> `;
+          else if (expiringSoon) statusBadges += `<span class="badge badge-expiry">🕐 Expiring</span> `;
+          if (!statusBadges) statusBadges  = `<span class="badge badge-ok">✅ OK</span>`;
+
+          const expiryDaysLabel = expiryLabel(s);
+          const expiryDaysCls   = expiryBadgeClass(s);
+
           return `<tr>
             <td><strong>${escHtml(s.Item)}</strong></td>
             <td>${escHtml(s.Category)}</td>
             <td class="qty-cell ${isLow ? 'qty-low' : 'qty-ok'}">${escHtml(s.Qty)}</td>
             <td>${escHtml(s.MinQty)}</td>
             <td class="text-muted">${escHtml(s.Unit)}</td>
+            <td class="text-muted">${escHtml(s.BatchNo   || '—')}</td>
+            <td class="text-muted">${escHtml(s.BatchDate || '—')}</td>
+            <td class="text-muted">${escHtml(s.ExpiryDate || '—')}</td>
+            <td>${s.ExpiryDate ? `<span class="badge ${expiryDaysCls}">${expiryDaysLabel}</span>` : '<span class="text-muted">—</span>'}</td>
             <td class="text-muted">${escHtml(s.LastUpdated || '—')}</td>
-            <td><span class="badge ${isLow ? 'badge-warn' : 'badge-ok'}">${isLow ? '⚠️ Low' : '✅ OK'}</span></td>
+            <td>${statusBadges}</td>
             <td>
               <div class="row-actions">
                 <button class="btn-icon btn-edit" onclick="openEditModal(${originalIdx})">Edit</button>
@@ -906,9 +1040,29 @@ function renderAdd() {
           <label for="a-minqty">Minimum Stock Level</label>
           <input class="form-input" id="a-minqty" type="number" min="0" placeholder="e.g. 20">
         </div>
-        <div class="form-group full">
+        <div class="form-group">
           <label for="a-unit">Unit</label>
           <input class="form-input" id="a-unit" type="text" placeholder="e.g. box, vial, pcs" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="a-batchno">Batch Number</label>
+          <input class="form-input" id="a-batchno" type="text" placeholder="e.g. BN2024-001, LOT-A3X" autocomplete="off">
+          <div class="form-hint">Optional. Alphanumeric batch/lot number.</div>
+        </div>
+        <div class="form-group">
+          <label for="a-batchdate">Batch Date</label>
+          <input class="form-input" id="a-batchdate" type="date">
+          <div class="form-hint">Date this batch was received.</div>
+        </div>
+        <div class="form-group">
+          <label for="a-expirydate">Expiry Date</label>
+          <input class="form-input" id="a-expirydate" type="date">
+          <div class="form-hint">Leave blank if item does not expire.</div>
+        </div>
+        <div class="form-group">
+          <label for="a-expirywarn">Warn Before Expiry (days)</label>
+          <input class="form-input" id="a-expirywarn" type="number" min="1" placeholder="e.g. 30">
+          <div class="form-hint">Flag on Restock page this many days before expiry. Default: 30.</div>
         </div>
       </div>
       <div class="form-actions mt-4">
@@ -920,11 +1074,15 @@ function renderAdd() {
 }
 
 function submitAdd() {
-  const item   = document.getElementById('a-item').value.trim();
-  const cat    = document.getElementById('a-cat').value.trim();
-  const qty    = document.getElementById('a-qty').value.trim();
-  const minqty = document.getElementById('a-minqty').value.trim();
-  const unit   = document.getElementById('a-unit').value.trim();
+  const item       = document.getElementById('a-item').value.trim();
+  const cat        = document.getElementById('a-cat').value.trim();
+  const qty        = document.getElementById('a-qty').value.trim();
+  const minqty     = document.getElementById('a-minqty').value.trim();
+  const unit       = document.getElementById('a-unit').value.trim();
+  const batchno    = document.getElementById('a-batchno').value.trim();
+  const batchdate  = document.getElementById('a-batchdate').value.trim();
+  const expirydate = document.getElementById('a-expirydate').value.trim();
+  const expirywarn = document.getElementById('a-expirywarn').value.trim();
 
   if (!item)   { document.getElementById('a-item').classList.add('error');   return; }
   if (!cat)    { document.getElementById('a-cat').classList.add('error');    return; }
@@ -933,7 +1091,15 @@ function submitAdd() {
   if (!unit)   { document.getElementById('a-unit').classList.add('error');   return; }
 
   const stock = loadStock();
-  stock.push({ Item: item, Category: cat, Qty: parseInt(qty), MinQty: parseInt(minqty), Unit: unit, LastUpdated: today() });
+  stock.push({
+    Item: item, Category: cat,
+    Qty: parseInt(qty), MinQty: parseInt(minqty), Unit: unit,
+    BatchNo:       batchno   || '',
+    BatchDate:     batchdate  || '',
+    ExpiryDate:    expirydate || '',
+    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 30,
+    LastUpdated: today()
+  });
   saveStock(stock);
   showToast(`✅ "${item}" added`);
   showView('stock');
@@ -1087,7 +1253,7 @@ function saveStockTake(staffName) {
   // File 1 (Changes folder): what changed during this stock take
   const changesCsv  = toCSV(changes, ['Item','Category','PreviousQty','NewQty','Unit','UpdatedBy','UpdatedAt']);
   // File 2 (Stock Take folder): the full updated stock snapshot after this stock take
-  const snapCsv     = toCSV(stock,   ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']);
+  const snapCsv     = toCSV(stock,   ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']);
 
   const stamp       = nowStamp();
   const safeName    = staffName.replace(/\s+/g, '_');
@@ -1101,20 +1267,35 @@ function saveStockTake(staffName) {
 }
 
 // ── Restock Report ─────────────────────────────────────────────────────────
+let restockTab = 'all'; // 'all' | 'low' | 'expiring'
+
 function renderRestock() {
   let stock = loadStock();
   const cats = getCategories(stock);
-  const low  = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty));
+  const low      = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty));
+  const expiring = stock.filter(s => {
+    const days = daysUntilExpiry(s.ExpiryDate);
+    return days !== null && (days < 0 || isExpiringSoon(s));
+  });
+  const allIssues = [...new Set([...low, ...expiring])];
 
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">Restock Report</h1>
     </div>
-    ${low.length === 0
-      ? `<div class="alert alert-ok">✅ All items are above their minimum stock levels. Nothing to restock.</div>`
-      : `<div class="alert alert-warn">⚠️ ${low.length} item(s) need restocking.</div>`
+
+    ${allIssues.length === 0
+      ? `<div class="alert alert-ok">✅ All items are sufficiently stocked and none are expiring soon.</div>`
+      : `<div class="alert alert-warn">⚠️ ${low.length} item(s) need restocking · 🕐 ${expiring.length} item(s) expiring soon or expired.</div>`
     }
-    ${low.length > 0 ? `
+
+    <div class="section-tabs">
+      <button class="section-tab ${restockTab==='all'      ? 'active' : ''}" onclick="restockTab='all';      renderRestock()">All Issues (${allIssues.length})</button>
+      <button class="section-tab ${restockTab==='low'      ? 'active' : ''}" onclick="restockTab='low';      renderRestock()">⚠️ Low Stock (${low.length})</button>
+      <button class="section-tab ${restockTab==='expiring' ? 'active' : ''}" onclick="restockTab='expiring'; renderRestock()">🕐 Expiring / Expired (${expiring.length})</button>
+    </div>
+
+    ${allIssues.length > 0 ? `
     <div class="filters-bar">
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
@@ -1129,7 +1310,7 @@ function renderRestock() {
       <div class="table-wrap" id="rs-table-wrap"></div>
     </div>` : ''}
   `;
-  if (low.length > 0) renderRestockTable();
+  if (allIssues.length > 0) renderRestockTable();
 }
 
 function renderRestockTable() {
@@ -1137,31 +1318,55 @@ function renderRestockTable() {
   const search = (document.getElementById('rs-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('rs-cat')?.value || '';
 
-  let low = stock
-    .filter(s => parseInt(s.Qty) < parseInt(s.MinQty))
-    .map(s => ({
-      Item: s.Item,
-      Category: s.Category,
-      Have: `${s.Qty} ${s.Unit}`,
-      'Need (Min)': `${s.MinQty} ${s.Unit}`,
-      'Order Qty': `${parseInt(s.MinQty) - parseInt(s.Qty)} ${s.Unit}`,
-      _have: parseInt(s.Qty),
-      _min: parseInt(s.MinQty)
-    }));
+  // Build combined rows
+  let rows = stock.map(s => {
+    const isLow      = parseInt(s.Qty) < parseInt(s.MinQty);
+    const days       = daysUntilExpiry(s.ExpiryDate);
+    const expired    = days !== null && days < 0;
+    const expireSoon = days !== null && !expired && isExpiringSoon(s);
+    const needRestock = isLow || expired || expireSoon;
+    if (!needRestock) return null;
 
-  if (search) low = low.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
-  if (cat)    low = low.filter(s => s.Category === cat);
+    return {
+      Item:       s.Item,
+      Category:   s.Category,
+      Unit:       s.Unit,
+      Qty:        s.Qty,
+      MinQty:     s.MinQty,
+      Have:       `${s.Qty} ${s.Unit}`,
+      'Need (Min)': `${s.MinQty} ${s.Unit}`,
+      'Order Qty':  isLow ? `${parseInt(s.MinQty) - parseInt(s.Qty)} ${s.Unit}` : '—',
+      ExpiryDate: s.ExpiryDate || '',
+      BatchDate:  s.BatchDate  || '',
+      ExpiryWarnDays: s.ExpiryWarnDays,
+      _isLow:       isLow,
+      _expired:     expired,
+      _expireSoon:  expireSoon,
+      _days:        days
+    };
+  }).filter(Boolean);
+
+  // Tab filter
+  if (restockTab === 'low')      rows = rows.filter(r => r._isLow);
+  if (restockTab === 'expiring') rows = rows.filter(r => r._expired || r._expireSoon);
+
+  // Text/category filter
+  if (search) rows = rows.filter(r => r.Item.toLowerCase().includes(search) || r.Category.toLowerCase().includes(search));
+  if (cat)    rows = rows.filter(r => r.Category === cat);
 
   const sv = sortState['restock'];
-  if (sv) low = sortData(low, sv.key, sv.dir);
+  if (sv) rows = sortData(rows, sv.key, sv.dir);
 
   const wrap = document.getElementById('rs-table-wrap');
   if (!wrap) return;
 
-  if (low.length === 0) {
+  if (rows.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
     return;
   }
+
+  const showExpiryCols = restockTab !== 'low';
+  const showStockCols  = restockTab !== 'expiring';
 
   wrap.innerHTML = `
     <table>
@@ -1169,19 +1374,37 @@ function renderRestockTable() {
         <tr>
           ${thHtml('Item', 'Item', 'restock')}
           ${thHtml('Category', 'Category', 'restock')}
-          <th>Have</th>
-          <th>Need (Min)</th>
-          <th>Order Qty</th>
+          <th>Issue</th>
+          ${showStockCols  ? `<th>Have</th><th>Need (Min)</th><th>Order Qty</th>` : ''}
+          ${showExpiryCols ? `${thHtml('Expiry Date','ExpiryDate','restock')}<th>Expires In</th>` : ''}
         </tr>
       </thead>
       <tbody>
-        ${low.map(s => `<tr>
-          <td><strong>${escHtml(s.Item)}</strong></td>
-          <td>${escHtml(s.Category)}</td>
-          <td class="qty-cell qty-low">${escHtml(s.Have)}</td>
-          <td>${escHtml(s['Need (Min)'])}</td>
-          <td><strong>${escHtml(s['Order Qty'])}</strong></td>
-        </tr>`).join('')}
+        ${rows.map(r => {
+          // Issue badges
+          let issue = '';
+          if (r._isLow)      issue += `<span class="badge badge-warn" style="margin-right:4px">⚠️ Low Stock</span>`;
+          if (r._expired)    issue += `<span class="badge badge-red" style="margin-right:4px">❌ Expired</span>`;
+          if (r._expireSoon) issue += `<span class="badge badge-expiry">🕐 Expiring Soon</span>`;
+
+          const expiryDaysTxt = r.ExpiryDate ? expiryLabel({ ExpiryDate: r.ExpiryDate, ExpiryWarnDays: r.ExpiryWarnDays }) : '—';
+          const expiryDaysCls = r.ExpiryDate ? expiryBadgeClass({ ExpiryDate: r.ExpiryDate, ExpiryWarnDays: r.ExpiryWarnDays }) : '';
+
+          return `<tr>
+            <td><strong>${escHtml(r.Item)}</strong></td>
+            <td>${escHtml(r.Category)}</td>
+            <td>${issue}</td>
+            ${showStockCols ? `
+              <td class="qty-cell qty-low">${escHtml(r.Have)}</td>
+              <td>${escHtml(r['Need (Min)'])}</td>
+              <td><strong>${r._isLow ? escHtml(r['Order Qty']) : '—'}</strong></td>
+            ` : ''}
+            ${showExpiryCols ? `
+              <td class="text-muted">${escHtml(r.ExpiryDate || '—')}</td>
+              <td>${r.ExpiryDate ? `<span class="badge ${expiryDaysCls}">${expiryDaysTxt}</span>` : '<span class="text-muted">—</span>'}</td>
+            ` : ''}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>
   `;
@@ -1194,11 +1417,15 @@ function openEditModal(idx) {
   const stock = loadStock();
   const s = stock[idx];
   editIdx = idx;
-  document.getElementById('edit-item').value    = s.Item;
-  document.getElementById('edit-category').value = s.Category;
-  document.getElementById('edit-qty').value     = s.Qty;
-  document.getElementById('edit-minqty').value  = s.MinQty;
-  document.getElementById('edit-unit').value    = s.Unit;
+  document.getElementById('edit-item').value      = s.Item;
+  document.getElementById('edit-category').value  = s.Category;
+  document.getElementById('edit-qty').value       = s.Qty;
+  document.getElementById('edit-minqty').value    = s.MinQty;
+  document.getElementById('edit-unit').value      = s.Unit;
+  document.getElementById('edit-batchno').value   = s.BatchNo    || '';
+  document.getElementById('edit-batchdate').value = s.BatchDate  || '';
+  document.getElementById('edit-expirydate').value= s.ExpiryDate || '';
+  document.getElementById('edit-expirywarn').value= s.ExpiryWarnDays || 30;
   document.getElementById('edit-modal').classList.remove('hidden');
 }
 
@@ -1208,18 +1435,30 @@ function closeEditModal() {
 }
 
 function saveEdit() {
-  const item   = document.getElementById('edit-item').value.trim();
-  const cat    = document.getElementById('edit-category').value.trim();
-  const qty    = parseInt(document.getElementById('edit-qty').value);
-  const minqty = parseInt(document.getElementById('edit-minqty').value);
-  const unit   = document.getElementById('edit-unit').value.trim();
+  const item        = document.getElementById('edit-item').value.trim();
+  const cat         = document.getElementById('edit-category').value.trim();
+  const qty         = parseInt(document.getElementById('edit-qty').value);
+  const minqty      = parseInt(document.getElementById('edit-minqty').value);
+  const unit        = document.getElementById('edit-unit').value.trim();
+  const batchno     = document.getElementById('edit-batchno').value.trim();
+  const batchdate   = document.getElementById('edit-batchdate').value.trim();
+  const expirydate  = document.getElementById('edit-expirydate').value.trim();
+  const expirywarn  = document.getElementById('edit-expirywarn').value.trim();
 
   if (!item || !cat || isNaN(qty) || isNaN(minqty) || !unit) {
-    showToast('Please fill in all fields.'); return;
+    showToast('Please fill in all required fields.'); return;
   }
 
   const stock = loadStock();
-  stock[editIdx] = { ...stock[editIdx], Item: item, Category: cat, Qty: qty, MinQty: minqty, Unit: unit, LastUpdated: today() };
+  stock[editIdx] = {
+    ...stock[editIdx],
+    Item: item, Category: cat, Qty: qty, MinQty: minqty, Unit: unit,
+    BatchNo:       batchno   || '',
+    BatchDate:     batchdate  || '',
+    ExpiryDate:    expirydate || '',
+    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 30,
+    LastUpdated: today()
+  };
   saveStock(stock);
   closeEditModal();
   showToast(`✅ "${item}" updated`);
@@ -1554,7 +1793,7 @@ function exportStockCSV() {
   const stock = loadStock();
   if (stock.length === 0) { showToast('No stock data to export.'); return; }
   const filename = `stock_${nowStamp()}.csv`;
-  downloadCSV(toCSV(stock, ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']), filename);
+  downloadCSV(toCSV(stock, ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']), filename);
   showToast(`⬇️ Exported as ${filename}`);
 }
 
