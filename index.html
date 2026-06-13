@@ -515,6 +515,52 @@
     align-items: center;
     gap: 8px;
   }
+  /* ── History tabs ─────────────────────────────────────────────────── */
+  .hist-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .hist-tab {
+    padding: 12px 22px;
+    border: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .hist-tab:hover { color: var(--text); }
+
+  .hist-tab.active {
+    color: var(--sidebar);
+    font-weight: 700;
+    border-bottom-color: var(--sidebar);
+  }
+
+  .hist-tab-desc {
+    font-size: 14px;
+    color: var(--text-muted);
+    padding: 14px 2px 16px;
+    line-height: 1.6;
+  }
+
+  .hist-tab-desc code {
+    background: var(--row-b);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--accent);
+  }
+
   /* ── History ──────────────────────────────────────────────────────── */
   .drop-zone {
     border: 2px dashed var(--border);
@@ -1038,16 +1084,19 @@ function saveStockTake(staffName) {
   saveStock(stock);
   stockTakeEntries = stock.map(() => '');
 
-  const fullCsv    = toCSV(stock, ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']);
-  const changesCsv = toCSV(changes, ['Item','Category','PreviousQty','NewQty','Unit','UpdatedBy','UpdatedAt']);
+  // File 1 (Changes folder): what changed during this stock take
+  const changesCsv  = toCSV(changes, ['Item','Category','PreviousQty','NewQty','Unit','UpdatedBy','UpdatedAt']);
+  // File 2 (Stock Take folder): the full updated stock snapshot after this stock take
+  const snapCsv     = toCSV(stock,   ['Item','Category','Qty','MinQty','Unit','LastUpdated','LastUpdatedBy']);
 
-  const stamp = nowStamp();
-  const fullName    = `stock_${today()}.csv`;
-  const changesName = `changes_${stamp}_${staffName.replace(/\s+/g,'_')}.csv`;
+  const stamp       = nowStamp();
+  const safeName    = staffName.replace(/\s+/g, '_');
+  const changesName = `changes_${stamp}_${safeName}.csv`;
+  const snapName    = `stocktake_${stamp}_${safeName}.csv`;
 
-  downloadCSV(fullCsv, fullName);
   downloadCSV(changesCsv, changesName);
-  showToast(`✅ ${updated} item(s) saved — CSVs downloaded`);
+  downloadCSV(snapCsv,    snapName);
+  showToast(`✅ ${updated} item(s) saved — 2 CSVs downloaded`);
   showView('stock');
 }
 
@@ -1203,122 +1252,213 @@ function confirmDelete() {
 }
 
 // ── History ────────────────────────────────────────────────────────────────
-let historyRows = [];
+let historyRows     = [];
 let historyFilename = '';
+let historyType     = '';   // 'changes' | 'snapshot'
+let historyTab      = 'changes'; // which tab is selected on the upload screen
 
 function renderHistory() {
+  const hasData = historyRows.length > 0;
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">History</h1>
-      ${historyRows.length > 0 ? `<button class="btn btn-secondary" onclick="clearHistory()">✕ Clear</button>` : ''}
+      ${hasData ? `<button class="btn btn-secondary" onclick="clearHistory()">✕ Clear</button>` : ''}
     </div>
 
-    ${historyRows.length === 0 ? `
-      <div class="card" style="padding:0;">
-        <div class="drop-zone" id="drop-zone"
-          onclick="document.getElementById('history-file-input').click()"
-          ondragover="event.preventDefault(); this.classList.add('drag-over')"
-          ondragleave="this.classList.remove('drag-over')"
-          ondrop="handleHistoryDrop(event)">
-          <div class="drop-zone-icon">📂</div>
-          <h3>Upload a changes CSV</h3>
-          <p>Tap to choose a file, or drag one in.<br>These are the <code>changes_…csv</code> files saved during a stock take.</p>
-        </div>
-        <input type="file" id="history-file-input" accept=".csv" class="hidden" onchange="loadHistoryFile(event)">
+    ${!hasData ? `
+      <div class="hist-tabs">
+        <button class="hist-tab ${historyTab === 'changes' ? 'active' : ''}"
+          onclick="historyTab='changes'; renderHistory()">📋 Changes Log</button>
+        <button class="hist-tab ${historyTab === 'snapshot' ? 'active' : ''}"
+          onclick="historyTab='snapshot'; renderHistory()">📦 Stock Take Snapshot</button>
       </div>
+
+      ${historyTab === 'changes' ? `
+        <div class="hist-tab-desc">
+          Upload a <code>changes_…csv</code> file to see what was adjusted during a stock take — previous quantities, new quantities, and who made the changes.
+        </div>
+        <div class="card" style="padding:0;">
+          <div class="drop-zone" id="drop-zone"
+            onclick="document.getElementById('history-file-input').click()"
+            ondragover="event.preventDefault();this.classList.add('drag-over')"
+            ondragleave="this.classList.remove('drag-over')"
+            ondrop="handleHistoryDrop(event)">
+            <div class="drop-zone-icon">📂</div>
+            <h3>Upload a Changes CSV</h3>
+            <p>Saved to the <strong>Changes</strong> folder after each stock take.<br>Filename starts with <code>changes_</code></p>
+          </div>
+          <input type="file" id="history-file-input" accept=".csv" class="hidden" onchange="loadHistoryFile(event)">
+        </div>
+      ` : `
+        <div class="hist-tab-desc">
+          Upload a <code>stocktake_…csv</code> file to view the full stock levels recorded at the end of a stock take.
+        </div>
+        <div class="card" style="padding:0;">
+          <div class="drop-zone" id="drop-zone"
+            onclick="document.getElementById('history-file-input').click()"
+            ondragover="event.preventDefault();this.classList.add('drag-over')"
+            ondragleave="this.classList.remove('drag-over')"
+            ondrop="handleHistoryDrop(event)">
+            <div class="drop-zone-icon">📂</div>
+            <h3>Upload a Stock Take Snapshot CSV</h3>
+            <p>Saved to the <strong>Stock Take</strong> folder after each stock take.<br>Filename starts with <code>stocktake_</code></p>
+          </div>
+          <input type="file" id="history-file-input" accept=".csv" class="hidden" onchange="loadHistoryFile(event)">
+        </div>
+      `}
     ` : `
       <div class="history-meta">
         <span>📄 <strong>${escHtml(historyFilename)}</strong></span>
-        <span>🔢 <strong>${historyRows.length}</strong> change${historyRows.length !== 1 ? 's' : ''}</span>
-        ${historyRows[0]?.UpdatedBy ? `<span>👤 <strong>${escHtml(historyRows[0].UpdatedBy)}</strong></span>` : ''}
-        ${historyRows[0]?.UpdatedAt ? `<span>🕓 <strong>${escHtml(historyRows[0].UpdatedAt)}</strong></span>` : ''}
+        <span class="badge ${historyType === 'changes' ? 'badge-warn' : 'badge-ok'}" style="font-size:13px;">
+          ${historyType === 'changes' ? '📋 Changes Log' : '📦 Snapshot'}
+        </span>
+        <span>🔢 <strong>${historyRows.length}</strong> row${historyRows.length !== 1 ? 's' : ''}</span>
+        ${historyType === 'changes' && historyRows[0]?.UpdatedBy ? `<span>👤 <strong>${escHtml(historyRows[0].UpdatedBy)}</strong></span>` : ''}
+        ${historyType === 'changes' && historyRows[0]?.UpdatedAt ? `<span>🕓 <strong>${escHtml(historyRows[0].UpdatedAt)}</strong></span>` : ''}
+        ${historyType === 'snapshot' && historyRows[0]?.LastUpdatedBy ? `<span>👤 <strong>${escHtml(historyRows[0].LastUpdatedBy)}</strong></span>` : ''}
+        ${historyType === 'snapshot' && historyRows[0]?.LastUpdated  ? `<span>🕓 <strong>${escHtml(historyRows[0].LastUpdated)}</strong></span>`  : ''}
       </div>
+
       <div class="filters-bar">
         <div class="search-wrap">
           <span class="search-icon">🔍</span>
           <input class="search-input" id="hist-search" type="text" placeholder="Search items…" oninput="renderHistoryTable()" autocomplete="off">
         </div>
-        <select class="filter-select" id="hist-delta" onchange="renderHistoryTable()">
-          <option value="">All Changes</option>
-          <option value="up">Quantity increased</option>
-          <option value="down">Quantity decreased</option>
-        </select>
+        ${historyType === 'changes' ? `
+          <select class="filter-select" id="hist-delta" onchange="renderHistoryTable()">
+            <option value="">All Changes</option>
+            <option value="up">Quantity increased</option>
+            <option value="down">Quantity decreased</option>
+          </select>
+        ` : `
+          <select class="filter-select" id="hist-cat" onchange="renderHistoryTable()">
+            <option value="">All Categories</option>
+            ${[...new Set(historyRows.map(r => r.Category).filter(Boolean))].sort()
+              .map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+          </select>
+        `}
       </div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div class="table-wrap" id="hist-table-wrap"></div>
       </div>
     `}
   `;
-  if (historyRows.length > 0) renderHistoryTable();
+  if (hasData) renderHistoryTable();
 }
 
 function renderHistoryTable() {
   const search = (document.getElementById('hist-search')?.value || '').toLowerCase();
-  const deltaFilter = document.getElementById('hist-delta')?.value || '';
+  const wrap   = document.getElementById('hist-table-wrap');
+  if (!wrap) return;
 
   let rows = [...historyRows];
-  if (search) rows = rows.filter(r => r.Item.toLowerCase().includes(search) || (r.Category || '').toLowerCase().includes(search));
-  if (deltaFilter === 'up')   rows = rows.filter(r => parseInt(r.NewQty) > parseInt(r.PreviousQty));
-  if (deltaFilter === 'down') rows = rows.filter(r => parseInt(r.NewQty) < parseInt(r.PreviousQty));
+  if (search) rows = rows.filter(r =>
+    (r.Item || '').toLowerCase().includes(search) ||
+    (r.Category || '').toLowerCase().includes(search)
+  );
+
+  if (historyType === 'changes') {
+    const deltaFilter = document.getElementById('hist-delta')?.value || '';
+    if (deltaFilter === 'up')   rows = rows.filter(r => parseInt(r.NewQty) > parseInt(r.PreviousQty));
+    if (deltaFilter === 'down') rows = rows.filter(r => parseInt(r.NewQty) < parseInt(r.PreviousQty));
+  } else {
+    const cat = document.getElementById('hist-cat')?.value || '';
+    if (cat) rows = rows.filter(r => r.Category === cat);
+  }
 
   const sv = sortState['history'];
   if (sv) rows = sortData(rows, sv.key, sv.dir);
-
-  const wrap = document.getElementById('hist-table-wrap');
-  if (!wrap) return;
 
   if (rows.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
     return;
   }
 
-  wrap.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          ${thHtml('Item', 'Item', 'history')}
-          ${thHtml('Category', 'Category', 'history')}
-          ${thHtml('Previous Qty', 'PreviousQty', 'history')}
-          ${thHtml('New Qty', 'NewQty', 'history')}
+  if (historyType === 'changes') {
+    const showBy = !!historyRows[0]?.UpdatedBy;
+    const showAt = !!historyRows[0]?.UpdatedAt;
+    wrap.innerHTML = `
+      <table>
+        <thead><tr>
+          ${thHtml('Item','Item','history')}
+          ${thHtml('Category','Category','history')}
+          ${thHtml('Previous Qty','PreviousQty','history')}
+          ${thHtml('New Qty','NewQty','history')}
           <th>Change</th>
           <th>Unit</th>
-          ${historyRows[0]?.UpdatedBy ? thHtml('Updated By', 'UpdatedBy', 'history') : ''}
-          ${historyRows[0]?.UpdatedAt ? thHtml('Updated At', 'UpdatedAt', 'history') : ''}
-        </tr>
-      </thead>
-      <tbody>
-        ${rows.map(r => {
-          const prev  = parseInt(r.PreviousQty);
-          const next  = parseInt(r.NewQty);
-          const delta = next - prev;
-          const deltaClass = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-none';
-          const deltaStr   = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : '— no change';
-          return `<tr>
-            <td><strong>${escHtml(r.Item)}</strong></td>
-            <td>${escHtml(r.Category || '—')}</td>
-            <td class="qty-cell">${escHtml(r.PreviousQty)}</td>
-            <td class="qty-cell">${escHtml(r.NewQty)}</td>
-            <td class="${deltaClass}">${deltaStr}</td>
-            <td class="text-muted">${escHtml(r.Unit || '—')}</td>
-            ${r.UpdatedBy ? `<td>${escHtml(r.UpdatedBy)}</td>` : ''}
-            ${r.UpdatedAt ? `<td class="text-muted">${escHtml(r.UpdatedAt)}</td>` : ''}
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-  `;
+          ${showBy ? thHtml('Updated By','UpdatedBy','history') : ''}
+          ${showAt ? thHtml('Updated At','UpdatedAt','history') : ''}
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => {
+            const prev = parseInt(r.PreviousQty), next = parseInt(r.NewQty), delta = next - prev;
+            const cls  = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-none';
+            const str  = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : '— no change';
+            return `<tr>
+              <td><strong>${escHtml(r.Item)}</strong></td>
+              <td>${escHtml(r.Category||'—')}</td>
+              <td class="qty-cell">${escHtml(r.PreviousQty)}</td>
+              <td class="qty-cell">${escHtml(r.NewQty)}</td>
+              <td class="${cls}">${str}</td>
+              <td class="text-muted">${escHtml(r.Unit||'—')}</td>
+              ${showBy ? `<td>${escHtml(r.UpdatedBy)}</td>` : ''}
+              ${showAt ? `<td class="text-muted">${escHtml(r.UpdatedAt)}</td>` : ''}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    // Snapshot view
+    wrap.innerHTML = `
+      <table>
+        <thead><tr>
+          ${thHtml('Item','Item','history')}
+          ${thHtml('Category','Category','history')}
+          ${thHtml('Qty','Qty','history')}
+          ${thHtml('Min Qty','MinQty','history')}
+          <th>Unit</th>
+          <th>Status</th>
+          ${thHtml('Last Updated','LastUpdated','history')}
+          ${thHtml('Updated By','LastUpdatedBy','history')}
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => {
+            const isLow = parseInt(r.Qty) < parseInt(r.MinQty);
+            return `<tr>
+              <td><strong>${escHtml(r.Item)}</strong></td>
+              <td>${escHtml(r.Category||'—')}</td>
+              <td class="qty-cell ${isLow ? 'qty-low' : 'qty-ok'}">${escHtml(r.Qty)}</td>
+              <td>${escHtml(r.MinQty||'—')}</td>
+              <td class="text-muted">${escHtml(r.Unit||'—')}</td>
+              <td><span class="badge ${isLow ? 'badge-warn' : 'badge-ok'}">${isLow ? '⚠️ Low' : '✅ OK'}</span></td>
+              <td class="text-muted">${escHtml(r.LastUpdated||'—')}</td>
+              <td>${escHtml(r.LastUpdatedBy||'—')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  }
+}
+
+function detectFileType(rows, filename) {
+  // Detect by columns present in the parsed data
+  if ('PreviousQty' in rows[0] && 'NewQty' in rows[0]) return 'changes';
+  if ('Qty' in rows[0] && 'MinQty' in rows[0]) return 'snapshot';
+  // Fallback: try filename prefix
+  if (filename.startsWith('changes_')) return 'changes';
+  if (filename.startsWith('stocktake_') || filename.startsWith('stock_')) return 'snapshot';
+  return null;
 }
 
 function parseCSVLine(line) {
-  // RFC 4180-compliant: handles quoted fields that may contain commas or newlines
   const vals = [];
   let cur = '', inQ = false, i = 0;
   while (i < line.length) {
     const ch = line[i];
     if (inQ) {
       if (ch === '"') {
-        if (line[i + 1] === '"') { cur += '"'; i += 2; } // escaped quote ""
-        else { inQ = false; i++; }                        // closing quote
+        if (line[i+1] === '"') { cur += '"'; i += 2; }
+        else { inQ = false; i++; }
       } else { cur += ch; i++; }
     } else {
       if (ch === '"') { inQ = true; i++; }
@@ -1333,10 +1473,10 @@ function parseCSVLine(line) {
 function parseChangesCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '').trim());
+  const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g,'').trim());
   return lines.slice(1).map(line => {
     const vals = parseCSVLine(line);
-    const obj = {};
+    const obj  = {};
     headers.forEach((h, i) => obj[h] = vals[i] !== undefined ? vals[i] : '');
     return obj;
   }).filter(r => r.Item && r.Item.trim());
@@ -1361,22 +1501,32 @@ function readHistoryFile(file) {
   reader.onload = e => {
     const rows = parseChangesCSV(e.target.result);
     if (rows.length === 0) { showToast('No valid data found in this file.', 3500); return; }
-    const required = ['Item', 'PreviousQty', 'NewQty'];
-    const missing = required.filter(k => !(k in rows[0]));
-    if (missing.length > 0) {
-      showToast(`Missing columns: ${missing.join(', ')}. Upload a changes_… CSV from a stock take.`, 4500);
+
+    const type = detectFileType(rows, file.name);
+    if (!type) {
+      showToast('Could not recognise this file. Upload a changes_… or stocktake_… CSV.', 4500);
       return;
     }
-    historyRows    = rows;
+
+    // Warn if uploaded to the wrong tab
+    if (type !== historyTab) {
+      const expected = historyTab === 'changes' ? 'changes_…' : 'stocktake_…';
+      showToast(`This looks like a ${type} file — switching view automatically.`, 3500);
+    }
+
+    historyRows     = rows;
     historyFilename = file.name;
+    historyType     = type;
+    historyTab      = type;
     renderHistory();
   };
   reader.readAsText(file);
 }
 
 function clearHistory() {
-  historyRows = [];
+  historyRows     = [];
   historyFilename = '';
+  historyType     = '';
   renderHistory();
 }
 
