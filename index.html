@@ -905,13 +905,6 @@ function renderStock() {
         <option value="">All Categories</option>
         ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
       </select>
-      <select class="filter-select" id="stock-status" onchange="renderStockTable()">
-        <option value="">All Statuses</option>
-        <option value="ok">✅ OK</option>
-        <option value="low">⚠️ Low Stock</option>
-        <option value="expiring">🕐 Expiring Soon</option>
-        <option value="expired">❌ Expired</option>
-      </select>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="table-wrap" id="stock-table-wrap"></div>
@@ -924,26 +917,35 @@ function renderStockTable() {
   let stock = loadStock();
   const search = (document.getElementById('stock-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('stock-cat')?.value || '';
-  const status = document.getElementById('stock-status')?.value || '';
 
   if (search) stock = stock.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
   if (cat)    stock = stock.filter(s => s.Category === cat);
-  if (status) {
-    stock = stock.filter(s => {
-      const isLow  = parseInt(s.Qty) < parseInt(s.MinQty);
-      const days   = daysUntilExpiry(s.ExpiryDate);
-      const expired    = days !== null && days < 0;
-      const expiringSoon = !expired && isExpiringSoon(s);
-      if (status === 'low')      return isLow;
-      if (status === 'expiring') return expiringSoon;
-      if (status === 'expired')  return expired;
-      if (status === 'ok')       return !isLow && !expired && !expiringSoon;
-      return true;
-    });
-  }
 
-  const s = sortState['stock'];
-  if (s) stock = sortData(stock, s.key, s.dir);
+  // Attach a sortable status priority to each item before sorting
+  stock = stock.map(s => {
+    const isLow        = parseInt(s.Qty) < parseInt(s.MinQty);
+    const days         = daysUntilExpiry(s.ExpiryDate);
+    const expired      = days !== null && days < 0;
+    const expiringSoon = !expired && isExpiringSoon(s);
+    let statusPriority;
+    if (expired)       statusPriority = 0; // Expired first
+    else if (isLow)    statusPriority = 1; // Low
+    else if (expiringSoon) statusPriority = 2; // Expiring soon
+    else               statusPriority = 3; // OK last
+    return { ...s, _statusPriority: statusPriority };
+  });
+
+  const sv = sortState['stock'];
+  if (sv) {
+    if (sv.key === 'Status') {
+      stock = [...stock].sort((a, b) => {
+        const diff = a._statusPriority - b._statusPriority;
+        return sv.dir === 'asc' ? diff : -diff;
+      });
+    } else {
+      stock = sortData(stock, sv.key, sv.dir);
+    }
+  }
 
   const wrap = document.getElementById('stock-table-wrap');
   if (!wrap) return;
@@ -969,7 +971,7 @@ function renderStockTable() {
           ${thHtml('Expiry Date', 'ExpiryDate', 'stock')}
           <th>Expires In</th>
           ${thHtml('Last Updated', 'LastUpdated', 'stock')}
-          <th>Status</th>
+          ${thHtml('Status', 'Status', 'stock')}
           <th>Actions</th>
         </tr>
       </thead>
@@ -1047,7 +1049,7 @@ function renderAdd() {
         <div class="form-group">
           <label for="a-batchno">Batch Number</label>
           <input class="form-input" id="a-batchno" type="text" placeholder="e.g. BN2024-001, LOT-A3X" autocomplete="off">
-          <div class="form-hint">Optional. Alphanumeric batch/lot number.</div>
+          <div class="form-hint">Alphanumeric batch/lot number.</div>
         </div>
         <div class="form-group">
           <label for="a-batchdate">Batch Date</label>
@@ -1501,7 +1503,12 @@ function renderHistory() {
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">History</h1>
-      ${hasData ? `<button class="btn btn-secondary" onclick="clearHistory()">✕ Clear</button>` : ''}
+      ${hasData ? `
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${historyType === 'snapshot' ? `<button class="btn btn-primary" onclick="loadSnapshotAsStock()">📥 Load as Current Stock</button>` : ''}
+          <button class="btn btn-secondary" onclick="clearHistory()">✕ Clear</button>
+        </div>
+      ` : ''}
     </div>
 
     ${!hasData ? `
@@ -1767,6 +1774,35 @@ function clearHistory() {
   historyFilename = '';
   historyType     = '';
   renderHistory();
+}
+
+function loadSnapshotAsStock() {
+  if (historyType !== 'snapshot' || historyRows.length === 0) return;
+
+  const confirmed = confirm(
+    `This will replace all current stock data with the ${historyRows.length} items from "${historyFilename}".\n\nThis cannot be undone. Continue?`
+  );
+  if (!confirmed) return;
+
+  // Map snapshot columns to the stock schema
+  const newStock = historyRows.map(r => ({
+    Item:           r.Item          || '',
+    Category:       r.Category      || '',
+    Qty:            parseInt(r.Qty) || 0,
+    MinQty:         parseInt(r.MinQty) || 0,
+    Unit:           r.Unit          || '',
+    BatchNo:        r.BatchNo       || '',
+    BatchDate:      r.BatchDate     || '',
+    ExpiryDate:     r.ExpiryDate    || '',
+    ExpiryWarnDays: parseInt(r.ExpiryWarnDays) || 30,
+    LastUpdated:    r.LastUpdated   || '',
+    LastUpdatedBy:  r.LastUpdatedBy || '',
+  }));
+
+  saveStock(newStock);
+  showToast(`✅ Loaded ${newStock.length} items from snapshot as current stock.`, 4000);
+  clearHistory();
+  showView('stock');
 }
 
 // ── CSV helpers ────────────────────────────────────────────────────────────
