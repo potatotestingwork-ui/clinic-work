@@ -14,7 +14,7 @@
 <style>
   /* ── Reset & Base ─────────────────────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+ 
   :root {
     --bg:         #F8FAFC;
     --sidebar:    #1E3A5F;
@@ -39,7 +39,7 @@
     --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
     --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
   }
-
+ 
   html, body {
     height: 100%;
     font-family: 'Inter', sans-serif;
@@ -47,7 +47,7 @@
     color: var(--text);
     -webkit-font-smoothing: antialiased;
   }
-
+ 
   /* ── Layout ──────────────────────────────────────────────────────── */
   .app {
     display: flex;
@@ -55,7 +55,7 @@
     height: -webkit-fill-available;
     overflow: hidden;
   }
-
+ 
   /* ── Sidebar ─────────────────────────────────────────────────────── */
   .sidebar {
     width: 280px;
@@ -65,14 +65,66 @@
     flex-direction: column;
     padding: 0;
     overflow-y: auto;
+    overflow-x: hidden;
     z-index: 10;
+    transition: width 0.22s cubic-bezier(0.4,0,0.2,1), min-width 0.22s cubic-bezier(0.4,0,0.2,1);
   }
-
+ 
+  .sidebar.collapsed {
+    width: 60px;
+    min-width: 60px;
+  }
+ 
   .sidebar-header {
     padding: 32px 24px 20px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    overflow: hidden;
+    min-height: 88px;
   }
-
+ 
+  .sidebar.collapsed .sidebar-header {
+    padding: 18px 0 14px;
+    justify-content: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+ 
+  .sidebar-header-text {
+    overflow: hidden;
+    transition: opacity 0.15s, width 0.22s;
+    white-space: nowrap;
+  }
+ 
+  .sidebar.collapsed .sidebar-header-text {
+    opacity: 0;
+    width: 0;
+    pointer-events: none;
+  }
+ 
+  .sidebar-toggle {
+    background: rgba(255,255,255,0.12);
+    border: none;
+    color: rgba(255,255,255,0.85);
+    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+    transition: background 0.15s, transform 0.22s;
+    margin-top: 4px;
+    -webkit-tap-highlight-color: transparent;
+  }
+ 
+  .sidebar-toggle:hover { background: rgba(255,255,255,0.22); }
+  .sidebar.collapsed .sidebar-toggle { transform: rotate(180deg); margin-top: 0; }
+ 
   .sidebar-logo {
     font-size: 13px;
     font-weight: 600;
@@ -81,19 +133,23 @@
     color: rgba(255,255,255,0.5);
     margin-bottom: 6px;
   }
-
+ 
   .sidebar-title {
     font-size: 22px;
     font-weight: 700;
     color: var(--white);
     line-height: 1.2;
   }
-
+ 
   .sidebar-nav {
     padding: 16px 12px;
     flex: 1;
   }
-
+ 
+  .sidebar.collapsed .sidebar-nav {
+    padding: 12px 6px;
+  }
+ 
   .nav-btn {
     display: flex;
     align-items: center;
@@ -112,20 +168,113 @@
     transition: background 0.15s, color 0.15s;
     margin-bottom: 4px;
     -webkit-tap-highlight-color: transparent;
+    white-space: nowrap;
+    overflow: hidden;
   }
-
+ 
+  .sidebar.collapsed .nav-btn {
+    padding: 13px 0;
+    justify-content: center;
+    gap: 0;
+  }
+ 
   .nav-btn:hover, .nav-btn.active {
     background: rgba(255,255,255,0.12);
     color: var(--white);
   }
-
+ 
   .nav-btn.active {
     background: rgba(255,255,255,0.18);
     font-weight: 600;
   }
-
-  .nav-icon { font-size: 18px; width: 22px; text-align: center; }
-
+ 
+  .nav-label {
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+ 
+  .sidebar.collapsed .nav-label {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+ 
+  .nav-icon { font-size: 18px; width: 22px; text-align: center; flex-shrink: 0; }
+ 
+  /* ── Column reorder modal ─────────────────────────────────────────── */
+  .col-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    backdrop-filter: blur(2px);
+  }
+  .col-modal-overlay.hidden { display: none; }
+  .col-modal {
+    background: var(--white);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    padding: 28px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .col-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .col-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    background: var(--row-b);
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.12s, box-shadow 0.12s;
+  }
+  .col-item:active { cursor: grabbing; }
+  .col-item.dragging { opacity: 0.45; }
+  .col-item.drag-over { background: #EEF4FF; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(44,79,122,0.15); }
+  .col-drag-handle { color: var(--text-muted); font-size: 16px; }
+  .col-vis-toggle {
+    margin-left: auto;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: var(--border);
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .col-vis-toggle.on { background: var(--sidebar); }
+  .col-vis-toggle::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+  }
+  .col-vis-toggle.on::after { transform: translateX(16px); }
+  .col-always-on { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+ 
   /* ── Main content ─────────────────────────────────────────────────── */
   .main {
     flex: 1;
@@ -135,7 +284,7 @@
     padding: 32px 32px 48px;
     background: var(--bg);
   }
-
+ 
   /* ── Page header ─────────────────────────────────────────────────── */
   .page-header {
     display: flex;
@@ -145,14 +294,14 @@
     flex-wrap: wrap;
     gap: 12px;
   }
-
+ 
   .page-title {
     font-size: 26px;
     font-weight: 700;
     color: var(--sidebar);
     line-height: 1.2;
   }
-
+ 
   /* ── Cards ────────────────────────────────────────────────────────── */
   .card {
     background: var(--white);
@@ -161,7 +310,7 @@
     padding: 24px;
     margin-bottom: 20px;
   }
-
+ 
   /* ── Filters bar ─────────────────────────────────────────────────── */
   .filters-bar {
     display: flex;
@@ -170,13 +319,13 @@
     flex-wrap: wrap;
     align-items: center;
   }
-
+ 
   .search-wrap {
     position: relative;
     flex: 1;
     min-width: 200px;
   }
-
+ 
   .search-icon {
     position: absolute;
     left: 12px;
@@ -186,7 +335,7 @@
     font-size: 16px;
     pointer-events: none;
   }
-
+ 
   .search-input {
     width: 100%;
     padding: 11px 12px 11px 38px;
@@ -199,9 +348,9 @@
     outline: none;
     transition: border-color 0.15s;
   }
-
+ 
   .search-input:focus { border-color: var(--accent); }
-
+ 
   .filter-select {
     padding: 11px 14px;
     border: 1.5px solid var(--border);
@@ -215,9 +364,9 @@
     min-width: 160px;
     transition: border-color 0.15s;
   }
-
+ 
   .filter-select:focus { border-color: var(--accent); }
-
+ 
   /* ── Table ────────────────────────────────────────────────────────── */
   .table-wrap {
     overflow-x: auto;
@@ -225,13 +374,13 @@
     border-radius: 8px;
     border: 1px solid var(--border);
   }
-
+ 
   table {
     width: 100%;
     border-collapse: collapse;
     font-size: 15px;
   }
-
+ 
   thead th {
     background: var(--header-bg);
     color: var(--header-fg);
@@ -245,31 +394,31 @@
     user-select: none;
     -webkit-user-select: none;
   }
-
+ 
   thead th.sortable { cursor: pointer; }
   thead th.sortable:hover { background: var(--accent); }
-
+ 
   .sort-indicator { margin-left: 6px; opacity: 0.6; font-size: 11px; }
   thead th.sort-asc .sort-indicator::after  { content: "▲"; opacity: 1; }
   thead th.sort-desc .sort-indicator::after { content: "▼"; opacity: 1; }
   thead th:not(.sort-asc):not(.sort-desc) .sort-indicator::after { content: "⇅"; }
-
+ 
   tbody tr:nth-child(odd)  { background: var(--row-a); }
   tbody tr:nth-child(even) { background: var(--row-b); }
   tbody tr:hover { background: #E8EFF7; }
-
+ 
   tbody td {
     padding: 13px 16px;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
   }
-
+ 
   tbody tr:last-child td { border-bottom: none; }
-
+ 
   .qty-cell { font-weight: 600; }
   .qty-low  { color: var(--red); }
   .qty-ok   { color: var(--green); }
-
+ 
   .badge {
     display: inline-block;
     padding: 3px 10px;
@@ -277,15 +426,15 @@
     font-size: 12px;
     font-weight: 600;
   }
-
+ 
   .badge-warn   { background: var(--warn-bg);  color: #92400E; }
   .badge-ok     { background: var(--green-bg); color: #166534; }
   .badge-expiry { background: #FFF7ED; color: #9A3412; border: 1px solid #FED7AA; }
   .badge-red    { background: var(--red-bg);   color: var(--red); }
-
+ 
   /* ── Action buttons in table ─────────────────────────────────────── */
   .row-actions { display: flex; gap: 8px; }
-
+ 
   .btn-icon {
     padding: 7px 12px;
     border-radius: 6px;
@@ -297,11 +446,11 @@
     transition: opacity 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
-
+ 
   .btn-icon:hover { opacity: 0.85; }
   .btn-edit   { background: var(--accent); color: var(--white); }
   .btn-delete { background: var(--red-bg); color: var(--red); }
-
+ 
   /* ── Primary buttons ─────────────────────────────────────────────── */
   .btn {
     display: inline-flex;
@@ -317,33 +466,33 @@
     transition: opacity 0.15s, transform 0.1s;
     -webkit-tap-highlight-color: transparent;
   }
-
+ 
   .btn:active { transform: scale(0.98); }
   .btn-primary   { background: var(--sidebar); color: var(--white); }
   .btn-secondary { background: var(--row-b);   color: var(--text); border: 1.5px solid var(--border); }
   .btn-danger    { background: var(--red);      color: var(--white); }
   .btn:hover { opacity: 0.88; }
-
+ 
   /* ── Form ─────────────────────────────────────────────────────────── */
   .form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
   }
-
+ 
   @media (max-width: 700px) {
     .form-grid { grid-template-columns: 1fr; }
   }
-
+ 
   .form-group { display: flex; flex-direction: column; gap: 6px; }
   .form-group.full { grid-column: 1 / -1; }
-
+ 
   label {
     font-size: 14px;
     font-weight: 600;
     color: var(--text);
   }
-
+ 
   .form-input, .form-select {
     padding: 12px 14px;
     border: 1.5px solid var(--border);
@@ -356,23 +505,23 @@
     transition: border-color 0.15s;
     width: 100%;
   }
-
+ 
   .form-input:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(44,79,122,0.1); }
   .form-input.error { border-color: var(--red); }
-
+ 
   .form-hint {
     font-size: 12px;
     color: var(--text-muted);
     margin-top: 2px;
   }
-
+ 
   .form-actions {
     display: flex;
     gap: 12px;
     margin-top: 8px;
     flex-wrap: wrap;
   }
-
+ 
   /* ── Stock take grid ─────────────────────────────────────────────── */
   .stock-take-table input {
     padding: 9px 12px;
@@ -384,12 +533,13 @@
     outline: none;
     transition: border-color 0.15s;
   }
-
+ 
   .stock-take-table input:focus { border-color: var(--accent); }
-
+ 
   .changed-row { background: #EEF4FF !important; }
+  .updated-row { background: #EBEBEB !important; }
   .expiry-soon-row { background: #FFF7ED !important; }
-
+ 
   /* ── Restock section tabs ──────────────────────────────────────────── */
   .section-tabs {
     display: flex;
@@ -422,7 +572,7 @@
     padding-bottom: 6px;
     border-bottom: 1px solid var(--border);
   }
-
+ 
   /* ── Modal ────────────────────────────────────────────────────────── */
   .modal-overlay {
     position: fixed;
@@ -435,9 +585,9 @@
     padding: 20px;
     backdrop-filter: blur(2px);
   }
-
+ 
   .modal-overlay.hidden { display: none; }
-
+ 
   .modal {
     background: var(--white);
     border-radius: 14px;
@@ -448,21 +598,21 @@
     max-height: 90vh;
     overflow-y: auto;
   }
-
+ 
   .modal-title {
     font-size: 20px;
     font-weight: 700;
     color: var(--sidebar);
     margin-bottom: 20px;
   }
-
+ 
   .modal-actions {
     display: flex;
     gap: 12px;
     margin-top: 24px;
     justify-content: flex-end;
   }
-
+ 
   /* ── Alerts ───────────────────────────────────────────────────────── */
   .alert {
     display: flex;
@@ -474,11 +624,11 @@
     font-weight: 500;
     margin-bottom: 20px;
   }
-
+ 
   .alert-warn  { background: var(--warn-bg);  color: #92400E; border: 1px solid #FDE68A; }
   .alert-ok    { background: var(--green-bg); color: #166534; border: 1px solid #BBF7D0; }
   .alert-info  { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
-
+ 
   /* ── Empty state ─────────────────────────────────────────────────── */
   .empty-state {
     display: flex;
@@ -489,11 +639,11 @@
     text-align: center;
     color: var(--text-muted);
   }
-
+ 
   .empty-icon { font-size: 48px; margin-bottom: 16px; }
   .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
   .empty-state p  { font-size: 15px; }
-
+ 
   /* ── Stats row ────────────────────────────────────────────────────── */
   .stats-row {
     display: grid;
@@ -501,7 +651,7 @@
     gap: 16px;
     margin-bottom: 24px;
   }
-
+ 
   .stat-card {
     background: var(--white);
     border-radius: var(--radius);
@@ -509,11 +659,11 @@
     padding: 20px;
     text-align: center;
   }
-
+ 
   .stat-value { font-size: 32px; font-weight: 700; color: var(--sidebar); }
   .stat-label { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-top: 4px; }
   .stat-card.warn .stat-value { color: var(--red); }
-
+ 
   /* ── Toast ────────────────────────────────────────────────────────── */
   .toast {
     position: fixed;
@@ -531,9 +681,9 @@
     white-space: nowrap;
     box-shadow: 0 8px 24px rgba(0,0,0,0.2);
   }
-
+ 
   .toast.show { transform: translateX(-50%) translateY(0); }
-
+ 
   /* ── Utility ─────────────────────────────────────────────────────── */
   .hidden { display: none !important; }
   .text-muted { color: var(--text-muted); font-size: 13px; }
@@ -558,7 +708,7 @@
     margin-bottom: 0;
     border-bottom: 2px solid var(--border);
   }
-
+ 
   .hist-tab {
     padding: 12px 22px;
     border: none;
@@ -573,22 +723,22 @@
     transition: color 0.15s, border-color 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
-
+ 
   .hist-tab:hover { color: var(--text); }
-
+ 
   .hist-tab.active {
     color: var(--sidebar);
     font-weight: 700;
     border-bottom-color: var(--sidebar);
   }
-
+ 
   .hist-tab-desc {
     font-size: 14px;
     color: var(--text-muted);
     padding: 14px 2px 16px;
     line-height: 1.6;
   }
-
+ 
   .hist-tab-desc code {
     background: var(--row-b);
     padding: 2px 6px;
@@ -596,7 +746,7 @@
     font-size: 13px;
     color: var(--accent);
   }
-
+ 
   /* ── History ──────────────────────────────────────────────────────── */
   .drop-zone {
     border: 2px dashed var(--border);
@@ -607,20 +757,20 @@
     transition: border-color 0.15s, background 0.15s;
     background: var(--white);
   }
-
+ 
   .drop-zone:hover, .drop-zone.drag-over {
     border-color: var(--accent);
     background: #EFF6FF;
   }
-
+ 
   .drop-zone-icon { font-size: 40px; margin-bottom: 12px; }
   .drop-zone h3   { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
   .drop-zone p    { font-size: 14px; color: var(--text-muted); }
-
+ 
   .delta-up   { color: var(--red);   font-weight: 700; }
   .delta-down { color: var(--green); font-weight: 700; }
   .delta-none { color: var(--text-muted); }
-
+ 
   .history-meta {
     display: flex;
     flex-wrap: wrap;
@@ -632,43 +782,46 @@
     margin-bottom: 16px;
     font-size: 14px;
   }
-
+ 
   .history-meta span { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
   .history-meta strong { color: var(--text); }
 </style>
 </head>
 <body>
 <div class="app">
-
+ 
   <!-- ── Sidebar ──────────────────────────────────────────────────── -->
-  <nav class="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">🏥 Clinic</div>
-      <div class="sidebar-title">Stock Manager</div>
+      <div class="sidebar-header-text">
+        <div class="sidebar-logo">🏥 Clinic</div>
+        <div class="sidebar-title">Stock Manager</div>
+      </div>
+      <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
     </div>
     <div class="sidebar-nav">
       <button class="nav-btn active" onclick="showView('stock')" id="nav-stock">
-        <span class="nav-icon">📋</span> View Stock
+        <span class="nav-icon">📋</span><span class="nav-label"> View Stock</span>
       </button>
       <button class="nav-btn" onclick="showView('add')" id="nav-add">
-        <span class="nav-icon">➕</span> Add Item
+        <span class="nav-icon">➕</span><span class="nav-label"> Add Item</span>
       </button>
       <button class="nav-btn" onclick="showView('stocktake')" id="nav-stocktake">
-        <span class="nav-icon">🔢</span> Stock Take
+        <span class="nav-icon">🔢</span><span class="nav-label"> Stock Take</span>
       </button>
       <button class="nav-btn" onclick="showView('restock')" id="nav-restock">
-        <span class="nav-icon">⚠️</span> Restock Report
+        <span class="nav-icon">⚠️</span><span class="nav-label"> Restock Report</span>
       </button>
       <button class="nav-btn" onclick="showView('history')" id="nav-history">
-        <span class="nav-icon">🕓</span> History
+        <span class="nav-icon">🕓</span><span class="nav-label"> History</span>
       </button>
     </div>
   </nav>
-
+ 
   <!-- ── Main ─────────────────────────────────────────────────────── -->
   <main class="main" id="main-content"></main>
 </div>
-
+ 
 <!-- ── Edit Modal ──────────────────────────────────────────────────── -->
 <div class="modal-overlay hidden" id="edit-modal">
   <div class="modal" style="max-width:560px;">
@@ -708,7 +861,7 @@
       </div>
       <div class="form-group">
         <label>Warn Before Expiry (days)</label>
-        <input class="form-input" id="edit-expirywarn" type="number" min="1" placeholder="e.g. 30">
+        <input class="form-input" id="edit-expirywarn" type="number" min="1" placeholder="e.g. 90">
         <div class="form-hint">Flag this item on the Restock page this many days before expiry.</div>
       </div>
     </div>
@@ -718,7 +871,7 @@
     </div>
   </div>
 </div>
-
+ 
 <!-- ── Delete Modal ────────────────────────────────────────────────── -->
 <div class="modal-overlay hidden" id="delete-modal">
   <div class="modal">
@@ -733,7 +886,7 @@
     </div>
   </div>
 </div>
-
+ 
 <!-- ── Staff Name Modal (Stock Take) ─────────────────────────────── -->
 <div class="modal-overlay hidden" id="staff-modal">
   <div class="modal">
@@ -749,23 +902,44 @@
     </div>
   </div>
 </div>
-
+ 
+<!-- ── Column Reorder Modal ──────────────────────────────────────── -->
+<div class="col-modal-overlay hidden" id="col-modal">
+  <div class="col-modal">
+    <div class="modal-title">⚙️ Arrange Columns</div>
+    <p style="font-size:14px;color:var(--text-muted);margin-bottom:4px;">Drag to reorder. Toggle the switch to show or hide a column.</p>
+    <div class="col-list" id="col-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="resetColOrder()">Reset to Default</button>
+      <button class="btn btn-primary" onclick="closeColModal()">Done</button>
+    </div>
+  </div>
+</div>
+ 
 <!-- ── Toast ───────────────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
-
+ 
 <script>
+// ── Sidebar collapse ───────────────────────────────────────────────────────
+let sidebarCollapsed = false;
+ 
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  document.getElementById('sidebar').classList.toggle('collapsed', sidebarCollapsed);
+}
+ 
 // ── Storage ────────────────────────────────────────────────────────────────
 const STOCK_KEY = 'clinic_stock_v2';
-
+ 
 function loadStock() {
   try { return JSON.parse(localStorage.getItem(STOCK_KEY)) || []; }
   catch { return []; }
 }
-
+ 
 function saveStock(data) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(data));
 }
-
+ 
 // ── Expiry helpers ─────────────────────────────────────────────────────────
 function daysUntilExpiry(expiryDateStr) {
   if (!expiryDateStr) return null;
@@ -773,14 +947,14 @@ function daysUntilExpiry(expiryDateStr) {
   const expiry = new Date(expiryDateStr); expiry.setHours(0,0,0,0);
   return Math.round((expiry - now) / 86400000);
 }
-
+ 
 function isExpiringSoon(item) {
   const days = daysUntilExpiry(item.ExpiryDate);
   if (days === null) return false;
-  const threshold = parseInt(item.ExpiryWarnDays) || 30;
+  const threshold = parseInt(item.ExpiryWarnDays) || 90;
   return days <= threshold;
 }
-
+ 
 function expiryLabel(item) {
   const days = daysUntilExpiry(item.ExpiryDate);
   if (days === null) return '—';
@@ -788,7 +962,7 @@ function expiryLabel(item) {
   if (days === 0) return 'Expires today';
   return `${days}d`;
 }
-
+ 
 function expiryBadgeClass(item) {
   const days = daysUntilExpiry(item.ExpiryDate);
   if (days === null) return '';
@@ -796,7 +970,7 @@ function expiryBadgeClass(item) {
   if (isExpiringSoon(item)) return 'badge-expiry';
   return 'badge-ok';
 }
-
+ 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function showToast(msg, duration = 3000) {
   const el = document.getElementById('toast');
@@ -804,10 +978,10 @@ function showToast(msg, duration = 3000) {
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), duration);
 }
-
+ 
 // ── Nav ────────────────────────────────────────────────────────────────────
 let currentView = 'stock';
-
+ 
 function showView(view) {
   currentView = view;
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -816,16 +990,16 @@ function showView(view) {
   const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, history: renderHistory };
   if (renders[view]) renders[view]();
 }
-
+ 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
+ 
 function today() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' }); // YYYY-MM-DD
 }
-
+ 
 function nowStamp() {
   // Returns YYYY-MM-DD_HH-MM in Singapore time, safe for filenames
   const d = new Date();
@@ -833,14 +1007,14 @@ function nowStamp() {
   const pad = n => String(n).padStart(2, '0');
   return `${sg.getFullYear()}-${pad(sg.getMonth()+1)}-${pad(sg.getDate())}_${pad(sg.getHours())}-${pad(sg.getMinutes())}`;
 }
-
+ 
 function getCategories(stock) {
   return [...new Set(stock.map(s => s.Category).filter(Boolean))].sort();
 }
-
+ 
 // Sort state
 let sortState = {};
-
+ 
 function sortData(data, key, dir) {
   return [...data].sort((a, b) => {
     let av = a[key], bv = b[key];
@@ -851,32 +1025,131 @@ function sortData(data, key, dir) {
     return 0;
   });
 }
-
+ 
 function thHtml(label, key, viewKey) {
   const s = sortState[viewKey] || {};
   const cls = s.key === key ? (s.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
   return `<th class="sortable ${cls}" onclick="toggleSort('${viewKey}','${key}')">${label}<span class="sort-indicator"></span></th>`;
 }
-
+ 
 function toggleSort(viewKey, key) {
   const s = sortState[viewKey] || {};
   sortState[viewKey] = { key, dir: (s.key === key && s.dir === 'asc') ? 'desc' : 'asc' };
   const map = { stock: renderStockTable, stocktake: renderStockTakeTable, restock: renderRestockTable, history: renderHistoryTable };
   if (map[viewKey]) map[viewKey]();
 }
-
-// ── View Stock ─────────────────────────────────────────────────────────────
+ 
+// ── Column order (View Stock) ──────────────────────────────────────────────
+const COL_DEFS = [
+  { key: 'Item',        label: 'Item',         always: true  },
+  { key: 'Category',    label: 'Category',     always: false },
+  { key: 'Qty',         label: 'Qty',          always: false },
+  { key: 'MinQty',      label: 'Min Qty',      always: false },
+  { key: 'BatchNo',     label: 'Batch No',     always: false },
+  { key: 'ExpiryDate',  label: 'Expiry Date',  always: false },
+  { key: 'Status',      label: 'Status',       always: false },
+  { key: 'Unit',        label: 'Unit',         always: false },
+  { key: 'BatchDate',   label: 'Batch Date',   always: false },
+  { key: 'ExpiresIn',   label: 'Expires In',   always: false },
+  { key: 'LastUpdated', label: 'Last Updated', always: false },
+  { key: 'Actions',     label: 'Actions',      always: true  },
+];
+ 
+// colOrder is an array of { key, visible }
+let colOrder = COL_DEFS.map(c => ({ key: c.key, visible: true }));
+ 
+function getColDef(key) { return COL_DEFS.find(c => c.key === key); }
+function visibleCols() { return colOrder.filter(c => c.visible); }
+ 
+function openColModal() {
+  renderColList();
+  document.getElementById('col-modal').classList.remove('hidden');
+}
+ 
+function closeColModal() {
+  document.getElementById('col-modal').classList.add('hidden');
+  renderStockTable();
+}
+ 
+function resetColOrder() {
+  colOrder = COL_DEFS.map(c => ({ key: c.key, visible: true }));
+  renderColList();
+  renderStockTable();
+}
+ 
+function renderColList() {
+  const list = document.getElementById('col-list');
+  list.innerHTML = colOrder.map((c, i) => {
+    const def = getColDef(c.key);
+    return `
+      <div class="col-item" draggable="true"
+        data-idx="${i}"
+        ondragstart="colDragStart(event,${i})"
+        ondragover="colDragOver(event,${i})"
+        ondragleave="colDragLeave(event)"
+        ondrop="colDrop(event,${i})"
+        ondragend="colDragEnd(event)">
+        <span class="col-drag-handle">⠿</span>
+        <span>${def.label}</span>
+        ${def.always
+          ? `<span class="col-always-on">Always shown</span>`
+          : `<button class="col-vis-toggle ${c.visible ? 'on' : ''}"
+               onclick="toggleColVis(${i})" title="${c.visible ? 'Hide' : 'Show'} column"></button>`
+        }
+      </div>`;
+  }).join('');
+}
+ 
+function toggleColVis(i) {
+  colOrder[i].visible = !colOrder[i].visible;
+  renderColList();
+  renderStockTable();
+}
+ 
+let colDragSrc = null;
+ 
+function colDragStart(e, i) {
+  colDragSrc = i;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function colDragOver(e, i) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.col-item').forEach(el => el.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+function colDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function colDrop(e, i) {
+  e.preventDefault();
+  if (colDragSrc === null || colDragSrc === i) return;
+  const moved = colOrder.splice(colDragSrc, 1)[0];
+  colOrder.splice(i, 0, moved);
+  colDragSrc = null;
+  renderColList();
+}
+function colDragEnd(e) {
+  document.querySelectorAll('.col-item').forEach(el => {
+    el.classList.remove('dragging','drag-over');
+  });
+  colDragSrc = null;
+}
+ 
+ 
 function renderStock() {
   const stock = loadStock();
   const cats  = getCategories(stock);
   const total = stock.length;
   const low   = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty)).length;
   const expiring = stock.filter(s => isExpiringSoon(s) || daysUntilExpiry(s.ExpiryDate) < 0).length;
-
+ 
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">All Stock Items</h1>
-      <button class="btn btn-secondary" onclick="exportStockCSV()">⬇️ Export Stock</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="openColModal()">⚙️ Columns</button>
+        <button class="btn btn-secondary" onclick="exportStockCSV()">⬇️ Export Stock</button>
+      </div>
     </div>
     <div class="stats-row" style="grid-template-columns:repeat(4,1fr);">
       <div class="stat-card">
@@ -912,15 +1185,15 @@ function renderStock() {
   `;
   renderStockTable();
 }
-
+ 
 function renderStockTable() {
   let stock = loadStock();
   const search = (document.getElementById('stock-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('stock-cat')?.value || '';
-
+ 
   if (search) stock = stock.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
   if (cat)    stock = stock.filter(s => s.Category === cat);
-
+ 
   // Attach a sortable status priority to each item before sorting
   stock = stock.map(s => {
     const isLow        = parseInt(s.Qty) < parseInt(s.MinQty);
@@ -928,13 +1201,13 @@ function renderStockTable() {
     const expired      = days !== null && days < 0;
     const expiringSoon = !expired && isExpiringSoon(s);
     let statusPriority;
-    if (expired)       statusPriority = 0; // Expired first
-    else if (isLow)    statusPriority = 1; // Low
-    else if (expiringSoon) statusPriority = 2; // Expiring soon
-    else               statusPriority = 3; // OK last
+    if (expired)       statusPriority = 0;
+    else if (isLow)    statusPriority = 1;
+    else if (expiringSoon) statusPriority = 2;
+    else               statusPriority = 3;
     return { ...s, _statusPriority: statusPriority };
   });
-
+ 
   const sv = sortState['stock'];
   if (sv) {
     if (sv.key === 'Status') {
@@ -946,181 +1219,277 @@ function renderStockTable() {
       stock = sortData(stock, sv.key, sv.dir);
     }
   }
-
+ 
   const wrap = document.getElementById('stock-table-wrap');
   if (!wrap) return;
-
+ 
   if (stock.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><h3>No items found</h3><p>Try adjusting your search or add some stock.</p></div>`;
     return;
   }
-
+ 
   const allStock = loadStock();
-
+  const cols = visibleCols();
+ 
+  // Build header
+  const headerCells = cols.map(c => {
+    switch (c.key) {
+      case 'Item':        return thHtml('Item', 'Item', 'stock');
+      case 'Category':    return thHtml('Category', 'Category', 'stock');
+      case 'Qty':         return thHtml('Qty', 'Qty', 'stock');
+      case 'MinQty':      return thHtml('Min Qty', 'MinQty', 'stock');
+      case 'Unit':        return `<th>Unit</th>`;
+      case 'BatchNo':     return thHtml('Batch No', 'BatchNo', 'stock');
+      case 'BatchDate':   return thHtml('Batch Date', 'BatchDate', 'stock');
+      case 'ExpiryDate':  return thHtml('Expiry Date', 'ExpiryDate', 'stock');
+      case 'ExpiresIn':   return `<th>Expires In</th>`;
+      case 'LastUpdated': return thHtml('Last Updated', 'LastUpdated', 'stock');
+      case 'Status':      return thHtml('Status', 'Status', 'stock');
+      case 'Actions':     return `<th>Actions</th>`;
+      default: return '';
+    }
+  }).join('');
+ 
+  const rows = stock.map(s => {
+    const isLow  = parseInt(s.Qty) < parseInt(s.MinQty);
+    const days   = daysUntilExpiry(s.ExpiryDate);
+    const expired    = days !== null && days < 0;
+    const expiringSoon = !expired && isExpiringSoon(s);
+    const originalIdx = allStock.findIndex(o => o.Item === s.Item && o.Category === s.Category);
+ 
+    let statusBadges = '';
+    if (isLow)         statusBadges += `<span class="badge badge-warn">⚠️ Low</span> `;
+    if (expired)       statusBadges += `<span class="badge badge-red">❌ Expired</span> `;
+    else if (expiringSoon) statusBadges += `<span class="badge badge-expiry">🕐 Expiring</span> `;
+    if (!statusBadges) statusBadges  = `<span class="badge badge-ok">✅ OK</span>`;
+ 
+    const expiryDaysLabel = expiryLabel(s);
+    const expiryDaysCls   = expiryBadgeClass(s);
+ 
+    const cellMap = {
+      Item:        `<td><strong>${escHtml(s.Item)}</strong></td>`,
+      Category:    `<td>${escHtml(s.Category)}</td>`,
+      Qty:         `<td class="qty-cell ${isLow ? 'qty-low' : 'qty-ok'}">${escHtml(s.Qty)}</td>`,
+      MinQty:      `<td>${escHtml(s.MinQty)}</td>`,
+      Unit:        `<td class="text-muted">${escHtml(s.Unit)}</td>`,
+      BatchNo:     `<td class="text-muted">${escHtml(s.BatchNo || '—')}</td>`,
+      BatchDate:   `<td class="text-muted">${escHtml(s.BatchDate || '—')}</td>`,
+      ExpiryDate:  `<td class="text-muted">${escHtml(s.ExpiryDate || '—')}</td>`,
+      ExpiresIn:   `<td>${s.ExpiryDate ? `<span class="badge ${expiryDaysCls}">${expiryDaysLabel}</span>` : '<span class="text-muted">—</span>'}</td>`,
+      LastUpdated: `<td class="text-muted">${escHtml(s.LastUpdated || '—')}</td>`,
+      Status:      `<td>${statusBadges}</td>`,
+      Actions:     `<td><div class="row-actions">
+                     <button class="btn-icon btn-edit" onclick="openEditModal(${originalIdx})">Edit</button>
+                     <button class="btn-icon btn-delete" onclick="openDeleteModal(${originalIdx})">Delete</button>
+                   </div></td>`,
+    };
+ 
+    return `<tr>${cols.map(c => cellMap[c.key] || '').join('')}</tr>`;
+  }).join('');
+ 
   wrap.innerHTML = `
     <table>
-      <thead>
-        <tr>
-          ${thHtml('Item', 'Item', 'stock')}
-          ${thHtml('Category', 'Category', 'stock')}
-          ${thHtml('Qty', 'Qty', 'stock')}
-          ${thHtml('Min Qty', 'MinQty', 'stock')}
-          <th>Unit</th>
-          ${thHtml('Batch No', 'BatchNo', 'stock')}
-          ${thHtml('Batch Date', 'BatchDate', 'stock')}
-          ${thHtml('Expiry Date', 'ExpiryDate', 'stock')}
-          <th>Expires In</th>
-          ${thHtml('Last Updated', 'LastUpdated', 'stock')}
-          ${thHtml('Status', 'Status', 'stock')}
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${stock.map(s => {
-          const isLow  = parseInt(s.Qty) < parseInt(s.MinQty);
-          const days   = daysUntilExpiry(s.ExpiryDate);
-          const expired    = days !== null && days < 0;
-          const expiringSoon = !expired && isExpiringSoon(s);
-          const originalIdx = allStock.findIndex(o => o.Item === s.Item && o.Category === s.Category);
-
-          // Build status badge(s)
-          let statusBadges = '';
-          if (isLow)         statusBadges += `<span class="badge badge-warn">⚠️ Low</span> `;
-          if (expired)       statusBadges += `<span class="badge badge-red">❌ Expired</span> `;
-          else if (expiringSoon) statusBadges += `<span class="badge badge-expiry">🕐 Expiring</span> `;
-          if (!statusBadges) statusBadges  = `<span class="badge badge-ok">✅ OK</span>`;
-
-          const expiryDaysLabel = expiryLabel(s);
-          const expiryDaysCls   = expiryBadgeClass(s);
-
-          return `<tr>
-            <td><strong>${escHtml(s.Item)}</strong></td>
-            <td>${escHtml(s.Category)}</td>
-            <td class="qty-cell ${isLow ? 'qty-low' : 'qty-ok'}">${escHtml(s.Qty)}</td>
-            <td>${escHtml(s.MinQty)}</td>
-            <td class="text-muted">${escHtml(s.Unit)}</td>
-            <td class="text-muted">${escHtml(s.BatchNo   || '—')}</td>
-            <td class="text-muted">${escHtml(s.BatchDate || '—')}</td>
-            <td class="text-muted">${escHtml(s.ExpiryDate || '—')}</td>
-            <td>${s.ExpiryDate ? `<span class="badge ${expiryDaysCls}">${expiryDaysLabel}</span>` : '<span class="text-muted">—</span>'}</td>
-            <td class="text-muted">${escHtml(s.LastUpdated || '—')}</td>
-            <td>${statusBadges}</td>
-            <td>
-              <div class="row-actions">
-                <button class="btn-icon btn-edit" onclick="openEditModal(${originalIdx})">Edit</button>
-                <button class="btn-icon btn-delete" onclick="openDeleteModal(${originalIdx})">Delete</button>
-              </div>
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
+      <thead><tr>${headerCells}</tr></thead>
+      <tbody>${rows}</tbody>
     </table>
   `;
 }
-
-// ── Add Item ───────────────────────────────────────────────────────────────
+ 
+// ── Add Item (two sub-tabs: New Item | Add Stock) ──────────────────────────
+let addTab = 'new-item'; // 'new-item' | 'add-stock'
+ 
 function renderAdd() {
+  const stock = loadStock();
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
-      <h1 class="page-title">Add New Item</h1>
+      <h1 class="page-title">Add Item</h1>
     </div>
+    <div class="section-tabs">
+      <button class="section-tab ${addTab === 'new-item'  ? 'active' : ''}" onclick="addTab='new-item';  renderAdd()">🆕 New Item</button>
+      <button class="section-tab ${addTab === 'add-stock' ? 'active' : ''}" onclick="addTab='add-stock'; renderAdd()">📦 Add Stock</button>
+    </div>
+    ${addTab === 'new-item' ? renderNewItemForm() : renderAddStockForm(stock)}
+  `;
+}
+ 
+function renderNewItemForm() {
+  return `
     <div class="card">
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:20px;">Register a new product in the catalogue. Batch and quantity details are added separately when stock arrives.</p>
       <div class="form-grid">
         <div class="form-group">
-          <label for="a-item">Item Name</label>
-          <input class="form-input" id="a-item" type="text" placeholder="e.g. Nitrile Gloves" autocomplete="off">
+          <label for="ni-item">Item Name <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="ni-item" type="text" placeholder="e.g. Nitrile Gloves" autocomplete="off">
         </div>
         <div class="form-group">
-          <label for="a-cat">Category</label>
-          <input class="form-input" id="a-cat" type="text" placeholder="e.g. PPE, Meds, Consumables" autocomplete="off">
+          <label for="ni-cat">Category <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="ni-cat" type="text" placeholder="e.g. PPE, Meds, Consumables" autocomplete="off">
         </div>
         <div class="form-group">
-          <label for="a-qty">Current Quantity</label>
-          <input class="form-input" id="a-qty" type="number" min="0" placeholder="e.g. 100">
+          <label for="ni-minqty">Minimum Stock Level <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="ni-minqty" type="number" min="0" placeholder="e.g. 20">
+          <div class="form-hint">Alert will show when quantity falls below this.</div>
         </div>
         <div class="form-group">
-          <label for="a-minqty">Minimum Stock Level</label>
-          <input class="form-input" id="a-minqty" type="number" min="0" placeholder="e.g. 20">
+          <label for="ni-unit">Unit <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="ni-unit" type="text" placeholder="e.g. box, vial, pcs" autocomplete="off">
         </div>
         <div class="form-group">
-          <label for="a-unit">Unit</label>
-          <input class="form-input" id="a-unit" type="text" placeholder="e.g. box, vial, pcs" autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label for="a-batchno">Batch Number</label>
-          <input class="form-input" id="a-batchno" type="text" placeholder="e.g. BN2024-001, LOT-A3X" autocomplete="off">
-          <div class="form-hint">Alphanumeric batch/lot number.</div>
-        </div>
-        <div class="form-group">
-          <label for="a-batchdate">Batch Date</label>
-          <input class="form-input" id="a-batchdate" type="date">
-          <div class="form-hint">Date this batch was received.</div>
-        </div>
-        <div class="form-group">
-          <label for="a-expirydate">Expiry Date</label>
-          <input class="form-input" id="a-expirydate" type="date">
-          <div class="form-hint">Leave blank if item does not expire.</div>
-        </div>
-        <div class="form-group">
-          <label for="a-expirywarn">Warn Before Expiry (days)</label>
-          <input class="form-input" id="a-expirywarn" type="number" min="1" placeholder="e.g. 30">
-          <div class="form-hint">Flag on Restock page this many days before expiry. Default: 30.</div>
+          <label for="ni-expirywarn">Warn Before Expiry (days)</label>
+          <input class="form-input" id="ni-expirywarn" type="number" min="1" placeholder="e.g. 90" value="90">
+          <div class="form-hint">Flag on Restock page this many days before expiry. Default: 90.</div>
         </div>
       </div>
       <div class="form-actions mt-4">
-        <button class="btn btn-primary" onclick="submitAdd()">➕ Add Item</button>
+        <button class="btn btn-primary" onclick="submitNewItem()">➕ Add to Catalogue</button>
         <button class="btn btn-secondary" onclick="showView('stock')">Cancel</button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
-
-function submitAdd() {
-  const item       = document.getElementById('a-item').value.trim();
-  const cat        = document.getElementById('a-cat').value.trim();
-  const qty        = document.getElementById('a-qty').value.trim();
-  const minqty     = document.getElementById('a-minqty').value.trim();
-  const unit       = document.getElementById('a-unit').value.trim();
-  const batchno    = document.getElementById('a-batchno').value.trim();
-  const batchdate  = document.getElementById('a-batchdate').value.trim();
-  const expirydate = document.getElementById('a-expirydate').value.trim();
-  const expirywarn = document.getElementById('a-expirywarn').value.trim();
-
-  if (!item)   { document.getElementById('a-item').classList.add('error');   return; }
-  if (!cat)    { document.getElementById('a-cat').classList.add('error');    return; }
-  if (qty === '') { document.getElementById('a-qty').classList.add('error'); return; }
-  if (minqty === '') { document.getElementById('a-minqty').classList.add('error'); return; }
-  if (!unit)   { document.getElementById('a-unit').classList.add('error');   return; }
-
+ 
+function renderAddStockForm(stock) {
+  const itemOptions = stock.length === 0
+    ? `<option value="">— No items in catalogue yet —</option>`
+    : `<option value="">— Select an item —</option>` +
+      stock.map(s => `<option value="${escHtml(s.Item)}">${escHtml(s.Item)} (${escHtml(s.Category)})</option>`).join('');
+ 
+  return `
+    <div class="card">
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:20px;">Record a new delivery batch for an existing item. This will add to the item's current quantity.</p>
+      ${stock.length === 0
+        ? `<div class="alert alert-info">📋 No items in the catalogue yet. Use the <strong>New Item</strong> tab to add a product first.</div>`
+        : ''}
+      <div class="form-grid">
+        <div class="form-group full">
+          <label for="as-item">Item <span style="color:var(--red)">*</span></label>
+          <select class="form-select" id="as-item" onchange="updateAddStockHint()">
+            ${itemOptions}
+          </select>
+          <div class="form-hint" id="as-item-hint"></div>
+        </div>
+        <div class="form-group">
+          <label for="as-qty">Quantity Received <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="as-qty" type="number" min="1" placeholder="e.g. 100">
+          <div class="form-hint">This will be added to the current stock count.</div>
+        </div>
+        <div class="form-group">
+          <label for="as-batchno">Batch Number</label>
+          <input class="form-input" id="as-batchno" type="text" placeholder="e.g. BN2024-001, LOT-A3X" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label for="as-restockdate">Restock Date <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="as-restockdate" type="date" value="${today()}">
+          <div class="form-hint">Date this batch was received into the clinic.</div>
+        </div>
+        <div class="form-group">
+          <label for="as-expirydate">Expiry Date</label>
+          <input class="form-input" id="as-expirydate" type="date">
+          <div class="form-hint">Leave blank if this batch does not expire.</div>
+        </div>
+        <div class="form-group">
+          <label for="as-expirywarn">Warn Before Expiry (days)</label>
+          <input class="form-input" id="as-expirywarn" type="number" min="1" placeholder="e.g. 90" value="180">
+          <div class="form-hint">Override the item's default expiry warning for this batch.</div>
+        </div>
+      </div>
+      <div class="form-actions mt-4">
+        <button class="btn btn-primary" onclick="submitAddStock()">📦 Add Stock</button>
+        <button class="btn btn-secondary" onclick="showView('stock')">Cancel</button>
+      </div>
+    </div>`;
+}
+ 
+function updateAddStockHint() {
+  const sel   = document.getElementById('as-item');
+  const hint  = document.getElementById('as-item-hint');
   const stock = loadStock();
+  const item  = stock.find(s => s.Item === sel.value);
+  if (item) {
+    hint.textContent = `Current stock: ${item.Qty} ${item.Unit} · Min level: ${item.MinQty} ${item.Unit}`;
+  } else {
+    hint.textContent = '';
+  }
+}
+ 
+function submitNewItem() {
+  const item       = document.getElementById('ni-item').value.trim();
+  const cat        = document.getElementById('ni-cat').value.trim();
+  const minqty     = document.getElementById('ni-minqty').value.trim();
+  const unit       = document.getElementById('ni-unit').value.trim();
+  const expirywarn = document.getElementById('ni-expirywarn').value.trim();
+ 
+  let valid = true;
+  ['ni-item','ni-cat','ni-minqty','ni-unit'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) { el.classList.add('error'); valid = false; }
+    else el.classList.remove('error');
+  });
+  if (!valid) { showToast('Please fill in all required fields.'); return; }
+ 
+  const stock = loadStock();
+  if (stock.find(s => s.Item.toLowerCase() === item.toLowerCase())) {
+    document.getElementById('ni-item').classList.add('error');
+    showToast(`"${item}" already exists in the catalogue.`, 3500);
+    return;
+  }
+ 
   stock.push({
     Item: item, Category: cat,
-    Qty: parseInt(qty), MinQty: parseInt(minqty), Unit: unit,
-    BatchNo:       batchno   || '',
-    BatchDate:     batchdate  || '',
-    ExpiryDate:    expirydate || '',
-    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 30,
+    Qty: 0, MinQty: parseInt(minqty), Unit: unit,
+    BatchNo: '', BatchDate: '', ExpiryDate: '',
+    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 90,
     LastUpdated: today()
   });
   saveStock(stock);
-  showToast(`✅ "${item}" added`);
+  showToast(`✅ "${item}" added to catalogue`);
+  addTab = 'add-stock';
+  renderAdd();
+}
+ 
+function submitAddStock() {
+  const itemName   = document.getElementById('as-item').value;
+  const qty        = document.getElementById('as-qty').value.trim();
+  const batchno    = document.getElementById('as-batchno').value.trim();
+  const restockdate= document.getElementById('as-restockdate').value.trim();
+  const expirydate = document.getElementById('as-expirydate').value.trim();
+  const expirywarn = document.getElementById('as-expirywarn').value.trim();
+ 
+  if (!itemName) { document.getElementById('as-item').classList.add('error'); showToast('Please select an item.'); return; }
+  if (!qty || parseInt(qty) < 1) { document.getElementById('as-qty').classList.add('error'); showToast('Please enter a valid quantity.'); return; }
+ 
+  const stock = loadStock();
+  const idx   = stock.findIndex(s => s.Item === itemName);
+  if (idx === -1) { showToast('Item not found.'); return; }
+ 
+  stock[idx].Qty          = parseInt(stock[idx].Qty) + parseInt(qty);
+  stock[idx].BatchNo      = batchno    || stock[idx].BatchNo;
+  stock[idx].BatchDate    = restockdate || stock[idx].BatchDate;
+  stock[idx].ExpiryDate   = expirydate || stock[idx].ExpiryDate;
+  if (expirywarn) stock[idx].ExpiryWarnDays = parseInt(expirywarn);
+  stock[idx].LastUpdated  = today();
+ 
+  saveStock(stock);
+  showToast(`✅ Added ${qty} ${stock[idx].Unit} of "${itemName}"`);
   showView('stock');
 }
-
+ 
+ 
+ 
 // ── Stock Take ─────────────────────────────────────────────────────────────
 let stockTakeEntries = [];
-
+let stockTakeChecked = []; // tracks "marked as updated" per original index
+ 
 function renderStockTake() {
   let stock = loadStock();
   const cats = getCategories(stock);
-
+ 
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">Stock Take</h1>
       <button class="btn btn-primary" onclick="openStaffModal()">💾 Save Stock Take</button>
     </div>
     <div class="alert alert-info">
-      📝 Enter the new counts for items you have checked. Leave blank to keep the current quantity. Changed rows will be highlighted.
+      📝 Enter the new counts for items you have checked. Changed counts are highlighted in <span style="color:#3B5BDB;font-weight:600;">blue</span>. Press <strong>✓ Done</strong> on each row to mark it as reviewed — reviewed rows turn <span style="color:#666;font-weight:600;">grey</span>.
     </div>
     <div class="filters-bar">
       <div class="search-wrap">
@@ -1136,32 +1505,38 @@ function renderStockTake() {
       <div class="table-wrap" id="st-table-wrap"></div>
     </div>
   `;
-
-  // Init entries
+ 
+  // Init entries and checked state
   stockTakeEntries = stock.map(() => '');
+  stockTakeChecked = stock.map(() => false);
   renderStockTakeTable();
 }
-
+ 
+function toggleStockTakeChecked(oi) {
+  stockTakeChecked[oi] = !stockTakeChecked[oi];
+  renderStockTakeTable();
+}
+ 
 function renderStockTakeTable() {
   let stock = loadStock();
   const search = (document.getElementById('st-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('st-cat')?.value || '';
-
+ 
   let filtered = stock.map((s, i) => ({ ...s, _origIdx: i }));
   if (search) filtered = filtered.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
   if (cat)    filtered = filtered.filter(s => s.Category === cat);
-
+ 
   const sv = sortState['stocktake'];
   if (sv) filtered = sortData(filtered, sv.key, sv.dir);
-
+ 
   const wrap = document.getElementById('st-table-wrap');
   if (!wrap) return;
-
+ 
   if (filtered.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><h3>No items found</h3><p>Try adjusting your filters.</p></div>`;
     return;
   }
-
+ 
   wrap.innerHTML = `
     <table class="stock-take-table">
       <thead>
@@ -1171,17 +1546,25 @@ function renderStockTakeTable() {
           ${thHtml('Current Qty', 'Qty', 'stocktake')}
           <th>Unit</th>
           <th>New Count</th>
+          <th>Status</th>
         </tr>
       </thead>
       <tbody>
         ${filtered.map(s => {
-          const oi = s._origIdx;
-          const val = stockTakeEntries[oi] || '';
+          const oi      = s._origIdx;
+          const val     = stockTakeEntries[oi] || '';
           const changed = val !== '' && parseInt(val) !== parseInt(s.Qty);
-          return `<tr class="${changed ? 'changed-row' : ''}">
+          const checked = stockTakeChecked[oi];
+          // checked (grey) takes priority over changed (blue)
+          const rowCls  = checked ? 'updated-row' : changed ? 'changed-row' : '';
+          const btnLabel = checked ? '↩ Undo' : '✓ Done';
+          const btnStyle = checked
+            ? 'background:#9CA3AF;color:#fff;'
+            : 'background:#E5E7EB;color:#374151;';
+          return `<tr class="${rowCls}">
             <td><strong>${escHtml(s.Item)}</strong></td>
             <td>${escHtml(s.Category)}</td>
-            <td class="qty-cell">${escHtml(s.Qty)} </td>
+            <td class="qty-cell">${escHtml(s.Qty)}</td>
             <td class="text-muted">${escHtml(s.Unit)}</td>
             <td>
               <input type="number" min="0"
@@ -1190,23 +1573,27 @@ function renderStockTakeTable() {
                 onchange="stockTakeEntries[${oi}] = this.value; renderStockTakeTable()"
                 oninput="stockTakeEntries[${oi}] = this.value;">
             </td>
+            <td>
+              <button class="btn-icon" style="${btnStyle}border-radius:6px;font-size:13px;font-weight:600;padding:7px 12px;border:none;cursor:pointer;"
+                onclick="toggleStockTakeChecked(${oi})">${btnLabel}</button>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
   `;
 }
-
+ 
 function openStaffModal() {
   document.getElementById('staff-name-input').value = '';
   document.getElementById('staff-modal').classList.remove('hidden');
   setTimeout(() => document.getElementById('staff-name-input').focus(), 100);
 }
-
+ 
 function closeStaffModal() {
   document.getElementById('staff-modal').classList.add('hidden');
 }
-
+ 
 function confirmStaffAndSave() {
   const name = document.getElementById('staff-name-input').value.trim();
   if (!name) {
@@ -1216,12 +1603,12 @@ function confirmStaffAndSave() {
   closeStaffModal();
   saveStockTake(name);
 }
-
+ 
 function saveStockTake(staffName) {
   const stock = loadStock();
   const changes = [];
   let updated = 0;
-
+ 
   stock.forEach((s, i) => {
     const val = stockTakeEntries[i];
     if (val !== '' && val !== null && val !== undefined) {
@@ -1243,34 +1630,34 @@ function saveStockTake(staffName) {
       }
     }
   });
-
+ 
   if (updated === 0) {
     showToast('No changes to save.', 2500);
     return;
   }
-
+ 
   saveStock(stock);
   stockTakeEntries = stock.map(() => '');
-
+ 
   // File 1 (Changes folder): what changed during this stock take
   const changesCsv  = toCSV(changes, ['Item','Category','PreviousQty','NewQty','Unit','UpdatedBy','UpdatedAt']);
   // File 2 (Stock Take folder): the full updated stock snapshot after this stock take
   const snapCsv     = toCSV(stock,   ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']);
-
+ 
   const stamp       = nowStamp();
   const safeName    = staffName.replace(/\s+/g, '_');
   const changesName = `changes_${stamp}_${safeName}.csv`;
   const snapName    = `stocktake_${stamp}_${safeName}.csv`;
-
+ 
   downloadCSV(changesCsv, changesName);
   downloadCSV(snapCsv,    snapName);
   showToast(`✅ ${updated} item(s) saved — 2 CSVs downloaded`);
   showView('stock');
 }
-
+ 
 // ── Restock Report ─────────────────────────────────────────────────────────
 let restockTab = 'all'; // 'all' | 'low' | 'expiring'
-
+ 
 function renderRestock() {
   let stock = loadStock();
   const cats = getCategories(stock);
@@ -1280,23 +1667,23 @@ function renderRestock() {
     return days !== null && (days < 0 || isExpiringSoon(s));
   });
   const allIssues = [...new Set([...low, ...expiring])];
-
+ 
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">Restock Report</h1>
     </div>
-
+ 
     ${allIssues.length === 0
       ? `<div class="alert alert-ok">✅ All items are sufficiently stocked and none are expiring soon.</div>`
       : `<div class="alert alert-warn">⚠️ ${low.length} item(s) need restocking · 🕐 ${expiring.length} item(s) expiring soon or expired.</div>`
     }
-
+ 
     <div class="section-tabs">
       <button class="section-tab ${restockTab==='all'      ? 'active' : ''}" onclick="restockTab='all';      renderRestock()">All Issues (${allIssues.length})</button>
       <button class="section-tab ${restockTab==='low'      ? 'active' : ''}" onclick="restockTab='low';      renderRestock()">⚠️ Low Stock (${low.length})</button>
       <button class="section-tab ${restockTab==='expiring' ? 'active' : ''}" onclick="restockTab='expiring'; renderRestock()">🕐 Expiring / Expired (${expiring.length})</button>
     </div>
-
+ 
     ${allIssues.length > 0 ? `
     <div class="filters-bar">
       <div class="search-wrap">
@@ -1314,12 +1701,12 @@ function renderRestock() {
   `;
   if (allIssues.length > 0) renderRestockTable();
 }
-
+ 
 function renderRestockTable() {
   const stock  = loadStock();
   const search = (document.getElementById('rs-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('rs-cat')?.value || '';
-
+ 
   // Build combined rows
   let rows = stock.map(s => {
     const isLow      = parseInt(s.Qty) < parseInt(s.MinQty);
@@ -1328,7 +1715,7 @@ function renderRestockTable() {
     const expireSoon = days !== null && !expired && isExpiringSoon(s);
     const needRestock = isLow || expired || expireSoon;
     if (!needRestock) return null;
-
+ 
     return {
       Item:       s.Item,
       Category:   s.Category,
@@ -1347,29 +1734,29 @@ function renderRestockTable() {
       _days:        days
     };
   }).filter(Boolean);
-
+ 
   // Tab filter
   if (restockTab === 'low')      rows = rows.filter(r => r._isLow);
   if (restockTab === 'expiring') rows = rows.filter(r => r._expired || r._expireSoon);
-
+ 
   // Text/category filter
   if (search) rows = rows.filter(r => r.Item.toLowerCase().includes(search) || r.Category.toLowerCase().includes(search));
   if (cat)    rows = rows.filter(r => r.Category === cat);
-
+ 
   const sv = sortState['restock'];
   if (sv) rows = sortData(rows, sv.key, sv.dir);
-
+ 
   const wrap = document.getElementById('rs-table-wrap');
   if (!wrap) return;
-
+ 
   if (rows.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
     return;
   }
-
+ 
   const showExpiryCols = restockTab !== 'low';
   const showStockCols  = restockTab !== 'expiring';
-
+ 
   wrap.innerHTML = `
     <table>
       <thead>
@@ -1388,10 +1775,10 @@ function renderRestockTable() {
           if (r._isLow)      issue += `<span class="badge badge-warn" style="margin-right:4px">⚠️ Low Stock</span>`;
           if (r._expired)    issue += `<span class="badge badge-red" style="margin-right:4px">❌ Expired</span>`;
           if (r._expireSoon) issue += `<span class="badge badge-expiry">🕐 Expiring Soon</span>`;
-
+ 
           const expiryDaysTxt = r.ExpiryDate ? expiryLabel({ ExpiryDate: r.ExpiryDate, ExpiryWarnDays: r.ExpiryWarnDays }) : '—';
           const expiryDaysCls = r.ExpiryDate ? expiryBadgeClass({ ExpiryDate: r.ExpiryDate, ExpiryWarnDays: r.ExpiryWarnDays }) : '';
-
+ 
           return `<tr>
             <td><strong>${escHtml(r.Item)}</strong></td>
             <td>${escHtml(r.Category)}</td>
@@ -1411,10 +1798,10 @@ function renderRestockTable() {
     </table>
   `;
 }
-
+ 
 // ── Edit Modal ─────────────────────────────────────────────────────────────
 let editIdx = -1;
-
+ 
 function openEditModal(idx) {
   const stock = loadStock();
   const s = stock[idx];
@@ -1427,15 +1814,15 @@ function openEditModal(idx) {
   document.getElementById('edit-batchno').value   = s.BatchNo    || '';
   document.getElementById('edit-batchdate').value = s.BatchDate  || '';
   document.getElementById('edit-expirydate').value= s.ExpiryDate || '';
-  document.getElementById('edit-expirywarn').value= s.ExpiryWarnDays || 30;
+  document.getElementById('edit-expirywarn').value= s.ExpiryWarnDays || 90;
   document.getElementById('edit-modal').classList.remove('hidden');
 }
-
+ 
 function closeEditModal() {
   document.getElementById('edit-modal').classList.add('hidden');
   editIdx = -1;
 }
-
+ 
 function saveEdit() {
   const item        = document.getElementById('edit-item').value.trim();
   const cat         = document.getElementById('edit-category').value.trim();
@@ -1446,11 +1833,11 @@ function saveEdit() {
   const batchdate   = document.getElementById('edit-batchdate').value.trim();
   const expirydate  = document.getElementById('edit-expirydate').value.trim();
   const expirywarn  = document.getElementById('edit-expirywarn').value.trim();
-
+ 
   if (!item || !cat || isNaN(qty) || isNaN(minqty) || !unit) {
     showToast('Please fill in all required fields.'); return;
   }
-
+ 
   const stock = loadStock();
   stock[editIdx] = {
     ...stock[editIdx],
@@ -1458,7 +1845,7 @@ function saveEdit() {
     BatchNo:       batchno   || '',
     BatchDate:     batchdate  || '',
     ExpiryDate:    expirydate || '',
-    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 30,
+    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 90,
     LastUpdated: today()
   };
   saveStock(stock);
@@ -1466,22 +1853,22 @@ function saveEdit() {
   showToast(`✅ "${item}" updated`);
   renderStock();
 }
-
+ 
 // ── Delete Modal ───────────────────────────────────────────────────────────
 let deleteIdx = -1;
-
+ 
 function openDeleteModal(idx) {
   const stock = loadStock();
   deleteIdx = idx;
   document.getElementById('delete-item-name').textContent = stock[idx].Item;
   document.getElementById('delete-modal').classList.remove('hidden');
 }
-
+ 
 function closeDeleteModal() {
   document.getElementById('delete-modal').classList.add('hidden');
   deleteIdx = -1;
 }
-
+ 
 function confirmDelete() {
   const stock = loadStock();
   const name = stock[deleteIdx].Item;
@@ -1491,13 +1878,13 @@ function confirmDelete() {
   showToast(`🗑️ "${name}" deleted`);
   renderStock();
 }
-
+ 
 // ── History ────────────────────────────────────────────────────────────────
 let historyRows     = [];
 let historyFilename = '';
 let historyType     = '';   // 'changes' | 'snapshot'
 let historyTab      = 'changes'; // which tab is selected on the upload screen
-
+ 
 function renderHistory() {
   const hasData = historyRows.length > 0;
   document.getElementById('main-content').innerHTML = `
@@ -1510,7 +1897,7 @@ function renderHistory() {
         </div>
       ` : ''}
     </div>
-
+ 
     ${!hasData ? `
       <div class="hist-tabs">
         <button class="hist-tab ${historyTab === 'changes' ? 'active' : ''}"
@@ -1518,7 +1905,7 @@ function renderHistory() {
         <button class="hist-tab ${historyTab === 'snapshot' ? 'active' : ''}"
           onclick="historyTab='snapshot'; renderHistory()">📦 Stock Take Snapshot</button>
       </div>
-
+ 
       ${historyTab === 'changes' ? `
         <div class="hist-tab-desc">
           Upload a <code>changes_…csv</code> file to see what was adjusted during a stock take — previous quantities, new quantities, and who made the changes.
@@ -1564,7 +1951,7 @@ function renderHistory() {
         ${historyType === 'snapshot' && historyRows[0]?.LastUpdatedBy ? `<span>👤 <strong>${escHtml(historyRows[0].LastUpdatedBy)}</strong></span>` : ''}
         ${historyType === 'snapshot' && historyRows[0]?.LastUpdated  ? `<span>🕓 <strong>${escHtml(historyRows[0].LastUpdated)}</strong></span>`  : ''}
       </div>
-
+ 
       <div class="filters-bar">
         <div class="search-wrap">
           <span class="search-icon">🔍</span>
@@ -1591,18 +1978,18 @@ function renderHistory() {
   `;
   if (hasData) renderHistoryTable();
 }
-
+ 
 function renderHistoryTable() {
   const search = (document.getElementById('hist-search')?.value || '').toLowerCase();
   const wrap   = document.getElementById('hist-table-wrap');
   if (!wrap) return;
-
+ 
   let rows = [...historyRows];
   if (search) rows = rows.filter(r =>
     (r.Item || '').toLowerCase().includes(search) ||
     (r.Category || '').toLowerCase().includes(search)
   );
-
+ 
   if (historyType === 'changes') {
     const deltaFilter = document.getElementById('hist-delta')?.value || '';
     if (deltaFilter === 'up')   rows = rows.filter(r => parseInt(r.NewQty) > parseInt(r.PreviousQty));
@@ -1611,15 +1998,15 @@ function renderHistoryTable() {
     const cat = document.getElementById('hist-cat')?.value || '';
     if (cat) rows = rows.filter(r => r.Category === cat);
   }
-
+ 
   const sv = sortState['history'];
   if (sv) rows = sortData(rows, sv.key, sv.dir);
-
+ 
   if (rows.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
     return;
   }
-
+ 
   if (historyType === 'changes') {
     const showBy = !!historyRows[0]?.UpdatedBy;
     const showAt = !!historyRows[0]?.UpdatedAt;
@@ -1685,7 +2072,7 @@ function renderHistoryTable() {
       </table>`;
   }
 }
-
+ 
 function detectFileType(rows, filename) {
   // Detect by columns present in the parsed data
   if ('PreviousQty' in rows[0] && 'NewQty' in rows[0]) return 'changes';
@@ -1695,7 +2082,7 @@ function detectFileType(rows, filename) {
   if (filename.startsWith('stocktake_') || filename.startsWith('stock_')) return 'snapshot';
   return null;
 }
-
+ 
 function parseCSVLine(line) {
   const vals = [];
   let cur = '', inQ = false, i = 0;
@@ -1715,7 +2102,7 @@ function parseCSVLine(line) {
   vals.push(cur.trim());
   return vals;
 }
-
+ 
 function parseChangesCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
@@ -1727,13 +2114,13 @@ function parseChangesCSV(text) {
     return obj;
   }).filter(r => r.Item && r.Item.trim());
 }
-
+ 
 function loadHistoryFile(event) {
   const file = event.target.files[0];
   if (!file) return;
   readHistoryFile(file);
 }
-
+ 
 function handleHistoryDrop(event) {
   event.preventDefault();
   document.getElementById('drop-zone')?.classList.remove('drag-over');
@@ -1741,25 +2128,25 @@ function handleHistoryDrop(event) {
   if (!file || !file.name.endsWith('.csv')) { showToast('Please drop a CSV file.', 3000); return; }
   readHistoryFile(file);
 }
-
+ 
 function readHistoryFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     const rows = parseChangesCSV(e.target.result);
     if (rows.length === 0) { showToast('No valid data found in this file.', 3500); return; }
-
+ 
     const type = detectFileType(rows, file.name);
     if (!type) {
       showToast('Could not recognise this file. Upload a changes_… or stocktake_… CSV.', 4500);
       return;
     }
-
+ 
     // Warn if uploaded to the wrong tab
     if (type !== historyTab) {
       const expected = historyTab === 'changes' ? 'changes_…' : 'stocktake_…';
       showToast(`This looks like a ${type} file — switching view automatically.`, 3500);
     }
-
+ 
     historyRows     = rows;
     historyFilename = file.name;
     historyType     = type;
@@ -1768,22 +2155,22 @@ function readHistoryFile(file) {
   };
   reader.readAsText(file);
 }
-
+ 
 function clearHistory() {
   historyRows     = [];
   historyFilename = '';
   historyType     = '';
   renderHistory();
 }
-
+ 
 function loadSnapshotAsStock() {
   if (historyType !== 'snapshot' || historyRows.length === 0) return;
-
+ 
   const confirmed = confirm(
     `This will replace all current stock data with the ${historyRows.length} items from "${historyFilename}".\n\nThis cannot be undone. Continue?`
   );
   if (!confirmed) return;
-
+ 
   // Map snapshot columns to the stock schema
   const newStock = historyRows.map(r => ({
     Item:           r.Item          || '',
@@ -1794,17 +2181,17 @@ function loadSnapshotAsStock() {
     BatchNo:        r.BatchNo       || '',
     BatchDate:      r.BatchDate     || '',
     ExpiryDate:     r.ExpiryDate    || '',
-    ExpiryWarnDays: parseInt(r.ExpiryWarnDays) || 30,
+    ExpiryWarnDays: parseInt(r.ExpiryWarnDays) || 90,
     LastUpdated:    r.LastUpdated   || '',
     LastUpdatedBy:  r.LastUpdatedBy || '',
   }));
-
+ 
   saveStock(newStock);
   showToast(`✅ Loaded ${newStock.length} items from snapshot as current stock.`, 4000);
   clearHistory();
   showView('stock');
 }
-
+ 
 // ── CSV helpers ────────────────────────────────────────────────────────────
 function toCSV(rows, fields) {
   const header = fields.join(',');
@@ -1816,7 +2203,7 @@ function toCSV(rows, fields) {
   );
   return [header, ...lines].join('\r\n');
 }
-
+ 
 function downloadCSV(content, filename) {
   const blob = new Blob([content], { type: 'text/csv' });
   const url  = URL.createObjectURL(blob);
@@ -1824,7 +2211,7 @@ function downloadCSV(content, filename) {
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
-
+ 
 function exportStockCSV() {
   const stock = loadStock();
   if (stock.length === 0) { showToast('No stock data to export.'); return; }
@@ -1832,15 +2219,16 @@ function exportStockCSV() {
   downloadCSV(toCSV(stock, ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']), filename);
   showToast(`⬇️ Exported as ${filename}`);
 }
-
+ 
 // ── Close modals on overlay click ─────────────────────────────────────────
 document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeEditModal(); });
 document.getElementById('delete-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDeleteModal(); });
 document.getElementById('staff-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeStaffModal(); });
-
+document.getElementById('col-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeColModal(); });
+ 
 // ── Init ───────────────────────────────────────────────────────────────────
 showView('stock');
-
+ 
 // ── Service Worker (PWA offline support) ──────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -1850,3 +2238,9 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+ 
+
+
+
+
+
