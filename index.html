@@ -822,6 +822,9 @@
       </button>
       <button class="nav-btn" onclick="showView('history')" id="nav-history">
         <span class="nav-icon">🕓</span><span class="nav-label"> History</span>
+      <button class="nav-btn" onclick="showView('notes')" id="nav-notes">
+        <span class="nav-icon">📝</span><span class="nav-label"> Notes</span>
+      </button>
       </button>
     </div>
   </nav>
@@ -1006,7 +1009,7 @@ function showView(view) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const nb = document.getElementById('nav-' + view);
   if (nb) nb.classList.add('active');
-  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, history: renderHistory };
+  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, history: renderHistory, notes: renderNotes };
   if (renders[view]) renders[view]();
 }
  
@@ -1054,7 +1057,7 @@ function thHtml(label, key, viewKey) {
 function toggleSort(viewKey, key) {
   const s = sortState[viewKey] || {};
   sortState[viewKey] = { key, dir: (s.key === key && s.dir === 'asc') ? 'desc' : 'asc' };
-  const map = { stock: renderStockTable, stocktake: renderStockTakeTable, restock: renderRestockTable, history: renderHistoryTable };
+  const map = { stock: renderStockTable, stocktake: renderStockTakeTable, restock: renderRestockTable, history: renderHistoryTable, notes: renderNotesTable };
   if (map[viewKey]) map[viewKey]();
 }
  
@@ -1447,7 +1450,12 @@ function renderAddStockForm(stock) {
           <input class="form-input" id="as-staff" type="text" placeholder="e.g. Sarah" autocomplete="off">
           <div class="form-hint">Your name will be recorded with this batch.</div>
         </div>
-      </div>
+        </div>
+        <div class="form-group full">
+          <label for="as-notes">Notes</label>
+          <textarea class="form-input" id="as-notes" rows="3" placeholder="e.g. Stored in fridge B, supplier changed packagingâ¦" autocomplete="off" style="resize:vertical;line-height:1.5;"></textarea>
+          <div class="form-hint">Optional. Any notes about this batch will appear on the Notes tab.</div>
+        </div>
       <div class="form-actions mt-4">
         <button class="btn btn-primary" onclick="submitAddStock()">📦 Add Stock</button>
         <button class="btn btn-secondary" onclick="showView('stock')">Cancel</button>
@@ -1550,6 +1558,7 @@ function submitAddStock() {
   const expiryRaw   = document.getElementById('as-expirydate').value.trim();
   const expirywarn  = document.getElementById('as-expirywarn').value.trim();
   const staffName   = document.getElementById('as-staff').value.trim();
+  const notes       = document.getElementById('as-notes').value.trim();
  
   let valid = true;
   if (!itemName) {
@@ -1601,6 +1610,7 @@ function submitAddStock() {
     ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : (catalogueRow.ExpiryWarnDays || 90),
     LastUpdated:   today(),
     LastUpdatedBy: staffName,
+    Notes:         notes || '',
     _catalogue:    false
   };
  
@@ -2073,6 +2083,93 @@ function confirmDelete() {
   closeDeleteModal();
   showToast(`🗑️ "${name}" deleted`);
   renderStock();
+}
+ 
+// ── Notes ─────────────────────────────────────────────────────────────────
+function renderNotes() {
+  const stock = loadStock();
+  const cats  = getCategories(stock);
+  const withNotes = stock.filter(s => s.Notes && s.Notes.trim());
+ 
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">Notes</h1>
+    </div>
+    ${withNotes.length === 0
+      ? `<div class="alert alert-info">📝 No batch notes yet. Add notes when recording a new stock delivery on the Add Item page.</div>`
+      : `
+    <div class="filters-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="notes-search" type="text" placeholder="Search items or notes…" oninput="renderNotesTable()" autocomplete="off">
+      </div>
+      <select class="filter-select" id="notes-cat" onchange="renderNotesTable()">
+        <option value="">All Categories</option>
+        ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap" id="notes-table-wrap"></div>
+    </div>`}
+  `;
+  if (withNotes.length > 0) renderNotesTable();
+}
+ 
+function renderNotesTable() {
+  const stock  = loadStock();
+  const search = (document.getElementById('notes-search')?.value || '').toLowerCase();
+  const cat    = document.getElementById('notes-cat')?.value || '';
+ 
+  let rows = stock.filter(s => s.Notes && s.Notes.trim());
+  if (search) rows = rows.filter(s =>
+    s.Item.toLowerCase().includes(search) ||
+    s.Category.toLowerCase().includes(search) ||
+    s.Notes.toLowerCase().includes(search)
+  );
+  if (cat) rows = rows.filter(s => s.Category === cat);
+ 
+  const sv = sortState['notes'];
+  if (sv) rows = sortData(rows, sv.key, sv.dir);
+ 
+  const wrap = document.getElementById('notes-table-wrap');
+  if (!wrap) return;
+ 
+  if (rows.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your search.</p></div>`;
+    return;
+  }
+ 
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          ${thHtml('Item', 'Item', 'notes')}
+          ${thHtml('Category', 'Category', 'notes')}
+          ${thHtml('Batch No', 'BatchNo', 'notes')}
+          ${thHtml('Batch Date', 'BatchDate', 'notes')}
+          ${thHtml('Expiry', 'ExpiryDate', 'notes')}
+          ${thHtml('Qty', 'Qty', 'notes')}
+          <th>Unit</th>
+          ${thHtml('Added By', 'LastUpdatedBy', 'notes')}
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(s => `
+          <tr>
+            <td><strong>${escHtml(s.Item)}</strong></td>
+            <td>${escHtml(s.Category)}</td>
+            <td class="text-muted">${escHtml(s.BatchNo || '—')}</td>
+            <td class="text-muted">${escHtml(s.BatchDate || '—')}</td>
+            <td class="text-muted">${escHtml(expiryDisplay(s))}</td>
+            <td class="qty-cell">${escHtml(s.Qty)}</td>
+            <td class="text-muted">${escHtml(s.Unit)}</td>
+            <td class="text-muted">${escHtml(s.LastUpdatedBy || '—')}</td>
+            <td style="max-width:280px;white-space:pre-wrap;font-size:14px;color:var(--text);">${escHtml(s.Notes)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
 }
  
 // ── History ────────────────────────────────────────────────────────────────
