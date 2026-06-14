@@ -1521,6 +1521,7 @@ function submitNewItem() {
     Qty: 0, MinQty: parseInt(minqty), Unit: unit,
     BatchNo: '', BatchDate: '', ExpiryDate: '',
     ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 90,
+    _catalogue: true,
     LastUpdated: today()
   });
   saveStock(stock);
@@ -1603,8 +1604,13 @@ function submitAddStock() {
     _catalogue:    false
   };
  
-  // Remove the placeholder zero-qty catalogue row if it exists (qty 0 + _catalogue flag)
-  const filteredStock = stock.filter(s => !(s.Item === itemName && s._catalogue === true && parseInt(s.Qty) === 0));
+  // Remove placeholder row: either flagged _catalogue, or zero-qty with no batch/expiry for this item
+  const filteredStock = stock.filter(s => !(
+    s.Item === itemName &&
+    parseInt(s.Qty) === 0 &&
+    !s.BatchNo &&
+    !s.ExpiryDate
+  ));
   filteredStock.push(newBatch);
   saveStock(filteredStock);
   showToast(`✅ Added ${qty} ${catalogueRow.Unit} of "${itemName}"`);
@@ -2429,3 +2435,8 @@ if ('serviceWorker' in navigator) {
 </body>
 </html>
  
+
+
+
+
+
