@@ -793,6 +793,65 @@
  
   .history-meta span { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
   .history-meta strong { color: var(--text); }
+
+  /* ── Loan Out ──────────────────────────────────────────────────────── */
+  .loan-badge { background: #EEF4FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+  .loan-search-wrap { position: relative; }
+  .loan-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    background: var(--white);
+    border: 1.5px solid var(--accent);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 500;
+    box-shadow: var(--shadow-md);
+  }
+  .loan-dropdown.hidden { display: none; }
+  .loan-dropdown-item {
+    padding: 11px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.4;
+    transition: background 0.1s;
+  }
+  .loan-dropdown-item:last-child { border-bottom: none; }
+  .loan-dropdown-item:hover, .loan-dropdown-item.focused { background: #EEF4FF; }
+  .loan-dropdown-empty { padding: 14px; font-size: 14px; color: var(--text-muted); text-align: center; }
+  .loan-selected-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #EEF4FF;
+    border: 1.5px solid #BFDBFE;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1E40AF;
+    margin-top: 6px;
+  }
+  .loan-selected-badge button {
+    background: none; border: none; cursor: pointer;
+    font-size: 16px; color: #1E40AF; line-height: 1; padding: 0 2px;
+  }
+  .loan-stock-info {
+    background: var(--row-b);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    margin-top: 8px;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .loan-stock-info span { color: var(--text-muted); }
+  .loan-stock-info strong { color: var(--text); }
 </style>
 </head>
 <body>
@@ -822,6 +881,12 @@
       </button>
       <button class="nav-btn" onclick="showView('history')" id="nav-history">
         <span class="nav-icon">🕓</span><span class="nav-label"> History</span>
+      </button>
+      <button class="nav-btn" onclick="showView('loan')" id="nav-loan">
+        <span class="nav-icon">🤝</span><span class="nav-label"> Loan Out Stock</span>
+      </button>
+      <button class="nav-btn" onclick="showView('loanrecords')" id="nav-loanrecords">
+        <span class="nav-icon">📤</span><span class="nav-label"> Loan Records</span>
       </button>
     </div>
   </nav>
@@ -1006,7 +1071,7 @@ function showView(view) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const nb = document.getElementById('nav-' + view);
   if (nb) nb.classList.add('active');
-  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, history: renderHistory };
+  const renders = { stock: renderStock, add: renderAdd, stocktake: renderStockTake, restock: renderRestock, history: renderHistory, loan: renderLoan, loanrecords: renderLoanRecords };
   if (renders[view]) renders[view]();
 }
  
@@ -2204,8 +2269,11 @@ function renderHistoryTable() {
   }
  
   if (historyType === 'changes') {
-    const showBy = !!historyRows[0]?.UpdatedBy;
-    const showAt = !!historyRows[0]?.UpdatedAt;
+    const showBy       = !!historyRows[0]?.UpdatedBy;
+    const showAt       = !!historyRows[0]?.UpdatedAt;
+    const showType     = rows.some(r => r.ChangeType);
+    const showLoanedTo = rows.some(r => r.LoanedTo);
+    const showNotes    = rows.some(r => r.Notes);
     wrap.innerHTML = `
       <table>
         <thead><tr>
@@ -2215,6 +2283,9 @@ function renderHistoryTable() {
           ${thHtml('New Qty','NewQty','history')}
           <th>Change</th>
           <th>Unit</th>
+          ${showType     ? '<th>Type</th>' : ''}
+          ${showLoanedTo ? '<th>Loaned To</th>' : ''}
+          ${showNotes    ? '<th>Notes</th>' : ''}
           ${showBy ? thHtml('Updated By','UpdatedBy','history') : ''}
           ${showAt ? thHtml('Updated At','UpdatedAt','history') : ''}
         </tr></thead>
@@ -2223,6 +2294,12 @@ function renderHistoryTable() {
             const prev = parseInt(r.PreviousQty), next = parseInt(r.NewQty), delta = next - prev;
             const cls  = delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-none';
             const str  = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : '— no change';
+            const isLoan = (r.ChangeType || '').toLowerCase() === 'loan';
+            const typeBadge = r.ChangeType
+              ? (isLoan
+                  ? `<span class="badge loan-badge">🤝 Loan</span>`
+                  : `<span class="badge badge-ok">${escHtml(r.ChangeType)}</span>`)
+              : '—';
             return `<tr>
               <td><strong>${escHtml(r.Item)}</strong></td>
               <td>${escHtml(r.Category||'—')}</td>
@@ -2230,6 +2307,9 @@ function renderHistoryTable() {
               <td class="qty-cell">${escHtml(r.NewQty)}</td>
               <td class="${cls}">${str}</td>
               <td class="text-muted">${escHtml(r.Unit||'—')}</td>
+              ${showType     ? `<td>${typeBadge}</td>` : ''}
+              ${showLoanedTo ? `<td>${escHtml(r.LoanedTo||'—')}</td>` : ''}
+              ${showNotes    ? `<td class="text-muted">${escHtml(r.Notes||'—')}</td>` : ''}
               ${showBy ? `<td>${escHtml(r.UpdatedBy)}</td>` : ''}
               ${showAt ? `<td class="text-muted">${escHtml(r.UpdatedAt)}</td>` : ''}
             </tr>`;
@@ -2416,7 +2496,441 @@ function exportStockCSV() {
   showToast(`⬇️ Exported as ${filename}`);
 }
  
-// ── Close modals on overlay click ─────────────────────────────────────────
+// ── Loan Out Storage ────────────────────────────────────────────────────────
+const LOAN_KEY = 'clinic_loans_v1';
+
+function loadLoans() {
+  try { return JSON.parse(localStorage.getItem(LOAN_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveLoans(data) {
+  localStorage.setItem(LOAN_KEY, JSON.stringify(data));
+}
+
+// ── Loan Out State ──────────────────────────────────────────────────────────
+let loanSelectedIdx  = -1;   // index in loadStock()
+let loanDropdownOpen = false;
+
+function renderLoan() {
+  const stock = loadStock();
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">🤝 Loan Out Stock</h1>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:20px;">
+      Loaning out stock will immediately deduct the quantity from the selected batch, save a stock snapshot, and record a change log entry marked as <strong>Loan</strong>.
+    </div>
+    <div class="card">
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label>Staff Name <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="loan-staff" type="text" placeholder="Who is processing this loan?" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Loaned To <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="loan-to" type="text" placeholder="Clinic / department / person name" autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Date <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="loan-date" type="date" value="${today()}">
+        </div>
+
+        <div class="form-group">
+          <label>Quantity to Loan <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="loan-qty" type="number" min="1" placeholder="e.g. 5">
+        </div>
+
+        <div class="form-group full">
+          <label>Medicine / Batch <span style="color:var(--red)">*</span></label>
+          <div class="loan-search-wrap" id="loan-search-wrap">
+            <input class="form-input" id="loan-search" type="text"
+              placeholder="Search by item name or batch number…"
+              oninput="loanFilterDropdown()"
+              onfocus="loanOpenDropdown()"
+              onkeydown="loanKeyNav(event)"
+              autocomplete="off">
+            <div class="loan-dropdown hidden" id="loan-dropdown"></div>
+          </div>
+          <div id="loan-selected-display"></div>
+        </div>
+
+        <div class="form-group full">
+          <label>Notes</label>
+          <input class="form-input" id="loan-notes" type="text" placeholder="Optional — reason, reference number, etc.">
+        </div>
+
+      </div>
+      <div class="form-actions" style="margin-top:24px;">
+        <button class="btn btn-primary" onclick="submitLoan()">✅ Confirm Loan</button>
+        <button class="btn btn-secondary" onclick="resetLoanForm()">↺ Reset</button>
+      </div>
+    </div>
+  `;
+
+  // Close dropdown when clicking outside
+  document.addEventListener('mousedown', loanOutsideClick);
+}
+
+function loanOutsideClick(e) {
+  const wrap = document.getElementById('loan-search-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('loan-dropdown')?.classList.add('hidden');
+    loanDropdownOpen = false;
+  }
+}
+
+function loanOpenDropdown() {
+  loanFilterDropdown();
+  document.getElementById('loan-dropdown')?.classList.remove('hidden');
+  loanDropdownOpen = true;
+}
+
+let loanFocusedIdx = -1;
+
+function loanFilterDropdown() {
+  const stock  = loadStock();
+  const query  = (document.getElementById('loan-search')?.value || '').toLowerCase();
+  const dd     = document.getElementById('loan-dropdown');
+  if (!dd) return;
+
+  const matches = stock
+    .map((s, i) => ({ ...s, _si: i }))
+    .filter(s =>
+      s.Item.toLowerCase().includes(query) ||
+      (s.BatchNo || '').toLowerCase().includes(query) ||
+      (s.Category || '').toLowerCase().includes(query)
+    );
+
+  loanFocusedIdx = -1;
+
+  if (matches.length === 0) {
+    dd.innerHTML = `<div class="loan-dropdown-empty">No matching items found</div>`;
+  } else {
+    dd.innerHTML = matches.map((s, li) => {
+      const qty   = parseInt(s.Qty) || 0;
+      const batch = s.BatchNo ? ` · Batch: ${escHtml(s.BatchNo)}` : '';
+      const exp   = s.ExpiryDate ? ` · Exp: ${escHtml(expiryDisplay(s))}` : '';
+      const qtyStyle = qty <= 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--green);font-weight:700;';
+      return `<div class="loan-dropdown-item" data-si="${s._si}" data-li="${li}"
+        onmousedown="loanSelectItem(${s._si})">
+        <strong>${escHtml(s.Item)}</strong>
+        <span style="color:var(--text-muted);font-size:13px;">${escHtml(s.Category || '')}${batch}${exp}</span>
+        <span style="${qtyStyle};float:right;font-size:13px;">${qty} ${escHtml(s.Unit || '')}</span>
+      </div>`;
+    }).join('');
+  }
+  dd.classList.remove('hidden');
+}
+
+function loanKeyNav(e) {
+  const dd    = document.getElementById('loan-dropdown');
+  if (!dd || dd.classList.contains('hidden')) return;
+  const items = dd.querySelectorAll('.loan-dropdown-item');
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    loanFocusedIdx = Math.min(loanFocusedIdx + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    loanFocusedIdx = Math.max(loanFocusedIdx - 1, 0);
+  } else if (e.key === 'Enter' && loanFocusedIdx >= 0) {
+    e.preventDefault();
+    const si = parseInt(items[loanFocusedIdx].dataset.si);
+    loanSelectItem(si);
+    return;
+  } else if (e.key === 'Escape') {
+    dd.classList.add('hidden');
+    return;
+  }
+
+  items.forEach((it, i) => it.classList.toggle('focused', i === loanFocusedIdx));
+  if (loanFocusedIdx >= 0) items[loanFocusedIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function loanSelectItem(si) {
+  const stock = loadStock();
+  const s     = stock[si];
+  if (!s) return;
+
+  loanSelectedIdx = si;
+  document.getElementById('loan-dropdown')?.classList.add('hidden');
+  loanDropdownOpen = false;
+
+  const searchInput = document.getElementById('loan-search');
+  if (searchInput) searchInput.value = '';
+
+  const display = document.getElementById('loan-selected-display');
+  if (display) {
+    const qty    = parseInt(s.Qty) || 0;
+    const batch  = s.BatchNo  ? `<span><strong>Batch:</strong> ${escHtml(s.BatchNo)}</span>` : '';
+    const exp    = s.ExpiryDate ? `<span><strong>Expiry:</strong> ${escHtml(expiryDisplay(s))}</span>` : '';
+    const cat    = s.Category  ? `<span><strong>Category:</strong> ${escHtml(s.Category)}</span>` : '';
+    const qtyStyle = qty <= 0 ? 'color:var(--red)' : 'color:var(--green)';
+    display.innerHTML = `
+      <div class="loan-selected-badge">
+        🧴 ${escHtml(s.Item)}
+        <button onclick="loanClearSelection()" title="Change selection">✕</button>
+      </div>
+      <div class="loan-stock-info">
+        ${cat}
+        ${batch}
+        ${exp}
+        <span><strong>Available:</strong> <span style="${qtyStyle};font-weight:700;">${qty}</span> ${escHtml(s.Unit || '')}</span>
+      </div>`;
+  }
+}
+
+function loanClearSelection() {
+  loanSelectedIdx = -1;
+  const display = document.getElementById('loan-selected-display');
+  if (display) display.innerHTML = '';
+  const searchInput = document.getElementById('loan-search');
+  if (searchInput) { searchInput.value = ''; searchInput.focus(); }
+}
+
+function resetLoanForm() {
+  loanSelectedIdx = -1;
+  ['loan-staff','loan-to','loan-notes','loan-search'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const dateEl = document.getElementById('loan-date');
+  if (dateEl) dateEl.value = today();
+  const qtyEl = document.getElementById('loan-qty');
+  if (qtyEl) qtyEl.value = '';
+  const display = document.getElementById('loan-selected-display');
+  if (display) display.innerHTML = '';
+  ['loan-staff','loan-to','loan-date','loan-qty'].forEach(id => {
+    document.getElementById(id)?.classList.remove('error');
+  });
+}
+
+function submitLoan() {
+  const staffName = document.getElementById('loan-staff')?.value.trim();
+  const loanedTo  = document.getElementById('loan-to')?.value.trim();
+  const loanDate  = document.getElementById('loan-date')?.value.trim();
+  const qtyRaw    = document.getElementById('loan-qty')?.value.trim();
+  const notes     = document.getElementById('loan-notes')?.value.trim();
+
+  // Validate
+  let valid = true;
+  ['loan-staff','loan-to','loan-date','loan-qty'].forEach(id => {
+    document.getElementById(id)?.classList.remove('error');
+  });
+
+  if (!staffName) { document.getElementById('loan-staff')?.classList.add('error'); valid = false; }
+  if (!loanedTo)  { document.getElementById('loan-to')?.classList.add('error');    valid = false; }
+  if (!loanDate)  { document.getElementById('loan-date')?.classList.add('error');  valid = false; }
+
+  const loanQty = parseInt(qtyRaw);
+  if (!qtyRaw || isNaN(loanQty) || loanQty < 1) {
+    document.getElementById('loan-qty')?.classList.add('error');
+    valid = false;
+  }
+  if (loanSelectedIdx < 0) {
+    showToast('⚠️ Please select a medicine/batch first.', 3000);
+    valid = false;
+  }
+
+  if (!valid) { showToast('⚠️ Please fill all required fields.', 3000); return; }
+
+  const stock = loadStock();
+  const s     = stock[loanSelectedIdx];
+  if (!s) { showToast('Selected item no longer found. Please refresh.', 3500); return; }
+
+  const currentQty = parseInt(s.Qty) || 0;
+  if (loanQty > currentQty) {
+    document.getElementById('loan-qty')?.classList.add('error');
+    showToast(`❌ Cannot loan ${loanQty} — only ${currentQty} ${s.Unit || 'units'} in this batch.`, 4000);
+    return;
+  }
+
+  const stamp    = new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });
+  const prevQty  = currentQty;
+  const newQty   = currentQty - loanQty;
+
+  // 1. Deduct from stock
+  stock[loanSelectedIdx].Qty           = newQty;
+  stock[loanSelectedIdx].LastUpdated   = today();
+  stock[loanSelectedIdx].LastUpdatedBy = staffName;
+  saveStock(stock);
+
+  // 2. Save loan record
+  const loans = loadLoans();
+  const loanRecord = {
+    LoanID:     `LOAN-${Date.now()}`,
+    Item:       s.Item,
+    Category:   s.Category || '',
+    BatchNo:    s.BatchNo  || '',
+    Unit:       s.Unit     || '',
+    QtyLoaned:  loanQty,
+    LoanedTo:   loanedTo,
+    StaffName:  staffName,
+    LoanDate:   loanDate,
+    Notes:      notes || '',
+    RecordedAt: stamp
+  };
+  loans.unshift(loanRecord);
+  saveLoans(loans);
+
+  // 3. Force-download stock snapshot CSV
+  const snapCsv = toCSV(stock, ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']);
+  const safeName = staffName.replace(/\s+/g, '_');
+  const ts       = nowStamp();
+  downloadCSV(snapCsv, `stocktake_${ts}_${safeName}_loan.csv`);
+
+  // 4. Force-download changes CSV with ChangeType = Loan
+  const changeRow = [{
+    Item:        s.Item,
+    Category:    s.Category || '',
+    BatchNo:     s.BatchNo  || '—',
+    PreviousQty: prevQty,
+    NewQty:      newQty,
+    Unit:        s.Unit     || '',
+    ChangeType:  'Loan',
+    LoanedTo:    loanedTo,
+    Notes:       notes     || '',
+    UpdatedBy:   staffName,
+    UpdatedAt:   stamp
+  }];
+  const changesCsv = toCSV(changeRow, ['Item','Category','BatchNo','PreviousQty','NewQty','Unit','ChangeType','LoanedTo','Notes','UpdatedBy','UpdatedAt']);
+  downloadCSV(changesCsv, `changes_${ts}_${safeName}_loan.csv`);
+
+  showToast(`✅ Loaned ${loanQty} ${s.Unit || 'unit(s)'} of ${s.Item} — 2 CSVs downloaded`, 4500);
+
+  // Reset and go to loan records
+  loanSelectedIdx = -1;
+  document.removeEventListener('mousedown', loanOutsideClick);
+  showView('loanrecords');
+}
+
+// ── Loan Records ────────────────────────────────────────────────────────────
+let loanRecordSort = {};
+
+function renderLoanRecords() {
+  const loans = loadLoans();
+  const cats  = [...new Set(loans.map(l => l.Item).filter(Boolean))].sort();
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">📤 Loan Records</h1>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="exportLoanCSV()">⬇️ Export CSV</button>
+        <button class="btn btn-primary"   onclick="showView('loan')">➕ New Loan</button>
+      </div>
+    </div>
+
+    ${loans.length === 0
+      ? `<div class="card"><div class="empty-state"><div class="empty-icon">📭</div><h3>No loans recorded yet</h3><p>Use <strong>Loan Out Stock</strong> to record your first loan.</p></div></div>`
+      : `
+    <div class="filters-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="lr-search" type="text" placeholder="Search item, batch, or loaned to…"
+          oninput="renderLoanTable()" autocomplete="off">
+      </div>
+      <select class="filter-select" id="lr-item" onchange="renderLoanTable()">
+        <option value="">All Items</option>
+        ${cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap" id="lr-table-wrap"></div>
+    </div>`
+    }
+  `;
+  if (loans.length > 0) renderLoanTable();
+}
+
+function renderLoanTable() {
+  const loans  = loadLoans();
+  const search = (document.getElementById('lr-search')?.value || '').toLowerCase();
+  const item   = document.getElementById('lr-item')?.value || '';
+  const wrap   = document.getElementById('lr-table-wrap');
+  if (!wrap) return;
+
+  let rows = [...loans];
+  if (search) rows = rows.filter(r =>
+    (r.Item     || '').toLowerCase().includes(search) ||
+    (r.BatchNo  || '').toLowerCase().includes(search) ||
+    (r.LoanedTo || '').toLowerCase().includes(search) ||
+    (r.StaffName|| '').toLowerCase().includes(search)
+  );
+  if (item) rows = rows.filter(r => r.Item === item);
+
+  const sv = loanRecordSort;
+  if (sv.key) {
+    rows = [...rows].sort((a, b) => {
+      let av = a[sv.key] || '', bv = b[sv.key] || '';
+      if (!isNaN(Number(av)) && !isNaN(Number(bv))) { av = Number(av); bv = Number(bv); }
+      else { av = String(av).toLowerCase(); bv = String(bv).toLowerCase(); }
+      if (av < bv) return sv.dir === 'asc' ? -1 : 1;
+      if (av > bv) return sv.dir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }
+
+  if (rows.length === 0) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><h3>No results</h3><p>Try adjusting your filters.</p></div>`;
+    return;
+  }
+
+  function lrTh(label, key) {
+    const cls = sv.key === key ? (sv.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+    return `<th class="sortable ${cls}" onclick="lrSort('${key}')">${label}<span class="sort-indicator"></span></th>`;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        ${lrTh('Item','Item')}
+        ${lrTh('Batch No','BatchNo')}
+        ${lrTh('Qty Loaned','QtyLoaned')}
+        <th>Unit</th>
+        ${lrTh('Loaned To','LoanedTo')}
+        ${lrTh('Staff Name','StaffName')}
+        ${lrTh('Loan Date','LoanDate')}
+        <th>Notes</th>
+        <th>Recorded At</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td><strong>${escHtml(r.Item)}</strong>${r.Category ? `<br><span class="text-muted">${escHtml(r.Category)}</span>` : ''}</td>
+          <td class="text-muted">${escHtml(r.BatchNo || '—')}</td>
+          <td class="qty-cell">${escHtml(String(r.QtyLoaned))}</td>
+          <td class="text-muted">${escHtml(r.Unit || '—')}</td>
+          <td><strong>${escHtml(r.LoanedTo)}</strong></td>
+          <td>${escHtml(r.StaffName)}</td>
+          <td class="text-muted">${escHtml(r.LoanDate)}</td>
+          <td class="text-muted">${escHtml(r.Notes || '—')}</td>
+          <td class="text-muted" style="font-size:12px;">${escHtml(r.RecordedAt)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function lrSort(key) {
+  loanRecordSort = {
+    key,
+    dir: (loanRecordSort.key === key && loanRecordSort.dir === 'asc') ? 'desc' : 'asc'
+  };
+  renderLoanTable();
+}
+
+function exportLoanCSV() {
+  const loans = loadLoans();
+  if (loans.length === 0) { showToast('No loan records to export.'); return; }
+  const filename = `loan_records_${nowStamp()}.csv`;
+  downloadCSV(toCSV(loans, ['LoanID','Item','Category','BatchNo','Unit','QtyLoaned','LoanedTo','StaffName','LoanDate','Notes','RecordedAt']), filename);
+  showToast(`⬇️ Exported as ${filename}`);
+}
+
+
 document.getElementById('edit-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeEditModal(); });
 document.getElementById('delete-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeDeleteModal(); });
 document.getElementById('staff-modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeStaffModal(); });
@@ -2434,4 +2948,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
- 
