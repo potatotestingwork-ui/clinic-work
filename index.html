@@ -38,6 +38,8 @@
     --radius:     10px;
     --shadow:     0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
     --shadow-md:  0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+    --st-edited:  #BBDEFB;
+    --st-reviewed:#5C9BD6;
   }
  
   html, body {
@@ -536,8 +538,14 @@
  
   .stock-take-table input:focus { border-color: var(--accent); }
  
-  .changed-row { background: #EEF4FF !important; }
-  .updated-row { background: #EBEBEB !important; }
+  .changed-row  { background: var(--st-edited)   !important; }
+  .updated-row  { background: var(--st-reviewed)  !important; }
+  .updated-row td { color: var(--white); }
+  .updated-row .text-muted { color: rgba(255,255,255,0.8); }
+  .updated-row .qty-cell   { color: var(--white); }
+  .updated-row input { background: rgba(255,255,255,0.15); color: var(--white); border-color: rgba(255,255,255,0.3); }
+  .deleted-row  { background: #FEE2E2 !important; }
+  .deleted-row td { text-decoration: line-through; opacity: 0.75; }
   .expiry-soon-row { background: #FFF7ED !important; }
  
   /* ── Restock section tabs ──────────────────────────────────────────── */
@@ -856,8 +864,9 @@
         <input class="form-input" id="edit-batchdate" type="date">
       </div>
       <div class="form-group">
-        <label>Expiry Date</label>
-        <input class="form-input" id="edit-expirydate" type="date">
+        <label>Expiry Date (YYYYMM)</label>
+        <input class="form-input" id="edit-expirydate" type="text" maxlength="6" placeholder="e.g. 202512">
+        <div class="form-hint">Year and month only, e.g. 202512 for Dec 2025.</div>
       </div>
       <div class="form-group">
         <label>Warn Before Expiry (days)</label>
@@ -963,6 +972,16 @@ function expiryLabel(item) {
   return `${days}d`;
 }
  
+function expiryDisplay(item) {
+  // Show stored ExpiryDisplay (YYYYMM) if available, else convert from ISO
+  if (item.ExpiryDisplay) return item.ExpiryDisplay;
+  if (!item.ExpiryDate) return '—';
+  // Convert ISO YYYY-MM-DD → YYYYMM
+  const parts = item.ExpiryDate.split('-');
+  if (parts.length >= 2) return parts[0] + parts[1];
+  return item.ExpiryDate;
+}
+ 
 function expiryBadgeClass(item) {
   const days = daysUntilExpiry(item.ExpiryDate);
   if (days === null) return '';
@@ -1041,18 +1060,19 @@ function toggleSort(viewKey, key) {
  
 // ── Column order (View Stock) ──────────────────────────────────────────────
 const COL_DEFS = [
-  { key: 'Item',        label: 'Item',         always: true  },
-  { key: 'Category',    label: 'Category',     always: false },
-  { key: 'Qty',         label: 'Qty',          always: false },
-  { key: 'MinQty',      label: 'Min Qty',      always: false },
-  { key: 'BatchNo',     label: 'Batch No',     always: false },
-  { key: 'ExpiryDate',  label: 'Expiry Date',  always: false },
-  { key: 'Status',      label: 'Status',       always: false },
-  { key: 'Unit',        label: 'Unit',         always: false },
-  { key: 'BatchDate',   label: 'Batch Date',   always: false },
-  { key: 'ExpiresIn',   label: 'Expires In',   always: false },
-  { key: 'LastUpdated', label: 'Last Updated', always: false },
-  { key: 'Actions',     label: 'Actions',      always: true  },
+  { key: 'Item',        label: 'Item',          always: true  },
+  { key: 'Category',    label: 'Category',      always: false },
+  { key: 'Qty',         label: 'Batch Qty',     always: false },
+  { key: 'TotalQty',    label: 'Total Qty',     always: false },
+  { key: 'MinQty',      label: 'Min Qty',       always: false },
+  { key: 'BatchNo',     label: 'Batch No',      always: false },
+  { key: 'ExpiryDate',  label: 'Expiry Date',   always: false },
+  { key: 'Status',      label: 'Status',        always: false },
+  { key: 'Unit',        label: 'Unit',          always: false },
+  { key: 'BatchDate',   label: 'Batch Date',    always: false },
+  { key: 'ExpiresIn',   label: 'Expires In',    always: false },
+  { key: 'LastUpdated', label: 'Last Updated',  always: false },
+  { key: 'Actions',     label: 'Actions',       always: true  },
 ];
  
 // colOrder is an array of { key, visible }
@@ -1139,9 +1159,18 @@ function colDragEnd(e) {
 function renderStock() {
   const stock = loadStock();
   const cats  = getCategories(stock);
-  const total = stock.length;
-  const low   = stock.filter(s => parseInt(s.Qty) < parseInt(s.MinQty)).length;
-  const expiring = stock.filter(s => isExpiringSoon(s) || daysUntilExpiry(s.ExpiryDate) < 0).length;
+  // Count unique product names (not batches)
+  const uniqueNames = new Set(stock.map(s => s.Item));
+  const total = uniqueNames.size;
+  // Low: total qty across all batches of an item < MinQty
+  const totalQtyMap = {};
+  const minQtyMap   = {};
+  stock.forEach(s => {
+    totalQtyMap[s.Item] = (totalQtyMap[s.Item] || 0) + parseInt(s.Qty || 0);
+    minQtyMap[s.Item]   = parseInt(s.MinQty || 0);
+  });
+  const low      = [...uniqueNames].filter(n => totalQtyMap[n] < minQtyMap[n]).length;
+  const expiring = stock.filter(s => s.ExpiryDate && (isExpiringSoon(s) || daysUntilExpiry(s.ExpiryDate) < 0)).length;
  
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
@@ -1194,17 +1223,24 @@ function renderStockTable() {
   if (search) stock = stock.filter(s => s.Item.toLowerCase().includes(search) || s.Category.toLowerCase().includes(search));
   if (cat)    stock = stock.filter(s => s.Category === cat);
  
-  // Attach a sortable status priority to each item before sorting
+  // Build a total-qty map across all batches for each item name
+  const allStock = loadStock();
+  const totalQtyMap = {};
+  allStock.forEach(s => {
+    totalQtyMap[s.Item] = (totalQtyMap[s.Item] || 0) + parseInt(s.Qty || 0);
+  });
+ 
+  // Attach status priority
   stock = stock.map(s => {
     const isLow        = parseInt(s.Qty) < parseInt(s.MinQty);
     const days         = daysUntilExpiry(s.ExpiryDate);
     const expired      = days !== null && days < 0;
     const expiringSoon = !expired && isExpiringSoon(s);
     let statusPriority;
-    if (expired)       statusPriority = 0;
-    else if (isLow)    statusPriority = 1;
+    if (expired)           statusPriority = 0;
+    else if (isLow)        statusPriority = 1;
     else if (expiringSoon) statusPriority = 2;
-    else               statusPriority = 3;
+    else                   statusPriority = 3;
     return { ...s, _statusPriority: statusPriority };
   });
  
@@ -1228,15 +1264,14 @@ function renderStockTable() {
     return;
   }
  
-  const allStock = loadStock();
   const cols = visibleCols();
  
-  // Build header
   const headerCells = cols.map(c => {
     switch (c.key) {
       case 'Item':        return thHtml('Item', 'Item', 'stock');
       case 'Category':    return thHtml('Category', 'Category', 'stock');
-      case 'Qty':         return thHtml('Qty', 'Qty', 'stock');
+      case 'Qty':         return thHtml('Batch Qty', 'Qty', 'stock');
+      case 'TotalQty':    return `<th>Total Qty</th>`;
       case 'MinQty':      return thHtml('Min Qty', 'MinQty', 'stock');
       case 'Unit':        return `<th>Unit</th>`;
       case 'BatchNo':     return thHtml('Batch No', 'BatchNo', 'stock');
@@ -1250,37 +1285,41 @@ function renderStockTable() {
     }
   }).join('');
  
-  const rows = stock.map(s => {
-    const isLow  = parseInt(s.Qty) < parseInt(s.MinQty);
-    const days   = daysUntilExpiry(s.ExpiryDate);
-    const expired    = days !== null && days < 0;
+  const rows = stock.map((s, visIdx) => {
+    const isLow        = parseInt(s.Qty) < parseInt(s.MinQty);
+    const days         = daysUntilExpiry(s.ExpiryDate);
+    const expired      = days !== null && days < 0;
     const expiringSoon = !expired && isExpiringSoon(s);
-    const originalIdx = allStock.findIndex(o => o.Item === s.Item && o.Category === s.Category);
+    const originalIdx  = allStock.findIndex(o =>
+      o.Item === s.Item && o.BatchNo === s.BatchNo && o.BatchDate === s.BatchDate
+    );
+    const totalQty     = totalQtyMap[s.Item] || 0;
  
     let statusBadges = '';
-    if (isLow)         statusBadges += `<span class="badge badge-warn">⚠️ Low</span> `;
-    if (expired)       statusBadges += `<span class="badge badge-red">❌ Expired</span> `;
+    if (isLow)             statusBadges += `<span class="badge badge-warn">⚠️ Low</span> `;
+    if (expired)           statusBadges += `<span class="badge badge-red">❌ Expired</span> `;
     else if (expiringSoon) statusBadges += `<span class="badge badge-expiry">🕐 Expiring</span> `;
-    if (!statusBadges) statusBadges  = `<span class="badge badge-ok">✅ OK</span>`;
+    if (!statusBadges)     statusBadges  = `<span class="badge badge-ok">✅ OK</span>`;
  
     const expiryDaysLabel = expiryLabel(s);
     const expiryDaysCls   = expiryBadgeClass(s);
+    const expiryDisp      = expiryDisplay(s);
  
     const cellMap = {
-      Item:        `<td><strong>${escHtml(s.Item)}</strong></td>`,
+      Item:        `<td><strong>${escHtml(s.Item)}</strong>${s._catalogue ? ' <span style="font-size:11px;color:var(--text-muted);">(no stock)</span>' : ''}</td>`,
       Category:    `<td>${escHtml(s.Category)}</td>`,
       Qty:         `<td class="qty-cell ${isLow ? 'qty-low' : 'qty-ok'}">${escHtml(s.Qty)}</td>`,
+      TotalQty:    `<td class="qty-cell" style="color:var(--accent);font-weight:700;">${totalQty}</td>`,
       MinQty:      `<td>${escHtml(s.MinQty)}</td>`,
       Unit:        `<td class="text-muted">${escHtml(s.Unit)}</td>`,
       BatchNo:     `<td class="text-muted">${escHtml(s.BatchNo || '—')}</td>`,
       BatchDate:   `<td class="text-muted">${escHtml(s.BatchDate || '—')}</td>`,
-      ExpiryDate:  `<td class="text-muted">${escHtml(s.ExpiryDate || '—')}</td>`,
+      ExpiryDate:  `<td class="text-muted">${escHtml(expiryDisp)}</td>`,
       ExpiresIn:   `<td>${s.ExpiryDate ? `<span class="badge ${expiryDaysCls}">${expiryDaysLabel}</span>` : '<span class="text-muted">—</span>'}</td>`,
       LastUpdated: `<td class="text-muted">${escHtml(s.LastUpdated || '—')}</td>`,
       Status:      `<td>${statusBadges}</td>`,
       Actions:     `<td><div class="row-actions">
                      <button class="btn-icon btn-edit" onclick="openEditModal(${originalIdx})">Edit</button>
-                     <button class="btn-icon btn-delete" onclick="openDeleteModal(${originalIdx})">Delete</button>
                    </div></td>`,
     };
  
@@ -1299,7 +1338,10 @@ function renderStockTable() {
 let addTab = 'new-item'; // 'new-item' | 'add-stock'
  
 function renderAdd() {
-  const stock = loadStock();
+  const allRows = loadStock();
+  // For the dropdown we want one entry per unique item name (use first occurrence for metadata)
+  const seen  = new Set();
+  const stock = allRows.filter(s => { if (seen.has(s.Item)) return false; seen.add(s.Item); return true; });
   document.getElementById('main-content').innerHTML = `
     <div class="page-header">
       <h1 class="page-title">Add Item</h1>
@@ -1348,32 +1390,41 @@ function renderNewItemForm() {
 }
  
 function renderAddStockForm(stock) {
-  const itemOptions = stock.length === 0
-    ? `<option value="">— No items in catalogue yet —</option>`
-    : `<option value="">— Select an item —</option>` +
-      stock.map(s => `<option value="${escHtml(s.Item)}">${escHtml(s.Item)} (${escHtml(s.Category)})</option>`).join('');
+  // Unique item names for typeahead (filter out duplicate catalogue names)
+  const uniqueItems = [...new Map(stock.map(s => [s.Item, s])).values()];
  
   return `
     <div class="card">
-      <p style="font-size:14px;color:var(--text-muted);margin-bottom:20px;">Record a new delivery batch for an existing item. This will add to the item's current quantity.</p>
+      <p style="font-size:14px;color:var(--text-muted);margin-bottom:20px;">Record a new delivery batch for an existing item. Each batch will appear as its own row on View Stock.</p>
       ${stock.length === 0
         ? `<div class="alert alert-info">📋 No items in the catalogue yet. Use the <strong>New Item</strong> tab to add a product first.</div>`
         : ''}
       <div class="form-grid">
-        <div class="form-group full">
-          <label for="as-item">Item <span style="color:var(--red)">*</span></label>
-          <select class="form-select" id="as-item" onchange="updateAddStockHint()">
-            ${itemOptions}
-          </select>
+        <div class="form-group full" style="position:relative;">
+          <label for="as-item-input">Item <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="as-item-input" type="text"
+            placeholder="Type to search…" autocomplete="off"
+            oninput="filterAddStockItems()"
+            onfocus="showAddStockDropdown()"
+            onblur="setTimeout(hideAddStockDropdown, 180)">
+          <input type="hidden" id="as-item-value">
+          <div id="as-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:100;background:var(--white);border:1.5px solid var(--accent);border-radius:8px;max-height:200px;overflow-y:auto;box-shadow:var(--shadow-md);margin-top:2px;">
+            ${uniqueItems.map(s => `<div class="as-dropdown-item" data-item="${escHtml(s.Item)}" data-unit="${escHtml(s.Unit)}" data-minqty="${escHtml(s.MinQty)}"
+              style="padding:10px 14px;cursor:pointer;font-size:14px;"
+              onmousedown="selectAddStockItem(this)"
+              onmouseover="this.style.background='#EEF4FF'"
+              onmouseout="this.style.background=''">
+              <strong>${escHtml(s.Item)}</strong> <span style="color:var(--text-muted);font-size:12px;">(${escHtml(s.Category)})</span>
+            </div>`).join('')}
+          </div>
           <div class="form-hint" id="as-item-hint"></div>
         </div>
         <div class="form-group">
           <label for="as-qty">Quantity Received <span style="color:var(--red)">*</span></label>
           <input class="form-input" id="as-qty" type="number" min="1" placeholder="e.g. 100">
-          <div class="form-hint">This will be added to the current stock count.</div>
         </div>
         <div class="form-group">
-          <label for="as-batchno">Batch Number</label>
+          <label for="as-batchno">Batch Number <span style="color:var(--red)">*</span></label>
           <input class="form-input" id="as-batchno" type="text" placeholder="e.g. BN2024-001, LOT-A3X" autocomplete="off">
         </div>
         <div class="form-group">
@@ -1382,14 +1433,19 @@ function renderAddStockForm(stock) {
           <div class="form-hint">Date this batch was received into the clinic.</div>
         </div>
         <div class="form-group">
-          <label for="as-expirydate">Expiry Date</label>
-          <input class="form-input" id="as-expirydate" type="date">
-          <div class="form-hint">Leave blank if this batch does not expire.</div>
+          <label for="as-expirydate">Expiry Date (YYYYMM) <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="as-expirydate" type="text" maxlength="6" placeholder="e.g. 202512" autocomplete="off">
+          <div class="form-hint">Enter year and month, e.g. 202512 for Dec 2025.</div>
         </div>
         <div class="form-group">
           <label for="as-expirywarn">Warn Before Expiry (days)</label>
-          <input class="form-input" id="as-expirywarn" type="number" min="1" placeholder="e.g. 90" value="180">
-          <div class="form-hint">Override the item's default expiry warning for this batch.</div>
+          <input class="form-input" id="as-expirywarn" type="number" min="1" placeholder="Uses item default if blank">
+          <div class="form-hint">Leave blank to use the item's default warning period.</div>
+        </div>
+        <div class="form-group">
+          <label for="as-staff">Added By <span style="color:var(--red)">*</span></label>
+          <input class="form-input" id="as-staff" type="text" placeholder="e.g. Sarah" autocomplete="off">
+          <div class="form-hint">Your name will be recorded with this batch.</div>
         </div>
       </div>
       <div class="form-actions mt-4">
@@ -1399,13 +1455,40 @@ function renderAddStockForm(stock) {
     </div>`;
 }
  
-function updateAddStockHint() {
-  const sel   = document.getElementById('as-item');
-  const hint  = document.getElementById('as-item-hint');
+function filterAddStockItems() {
+  const q = document.getElementById('as-item-input').value.toLowerCase();
+  document.querySelectorAll('.as-dropdown-item').forEach(el => {
+    el.style.display = el.dataset.item.toLowerCase().includes(q) ? '' : 'none';
+  });
+  showAddStockDropdown();
+  // Clear hidden value if user is typing freely
+  document.getElementById('as-item-value').value = '';
+  document.getElementById('as-item-hint').textContent = '';
+}
+ 
+function showAddStockDropdown() {
+  const dd = document.getElementById('as-item-dropdown');
+  if (dd) dd.style.display = 'block';
+}
+ 
+function hideAddStockDropdown() {
+  const dd = document.getElementById('as-item-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+ 
+function selectAddStockItem(el) {
+  const itemName = el.dataset.item;
+  document.getElementById('as-item-input').value = itemName;
+  document.getElementById('as-item-value').value = itemName;
+  hideAddStockDropdown();
+  // Update hint with catalogue info
   const stock = loadStock();
-  const item  = stock.find(s => s.Item === sel.value);
-  if (item) {
-    hint.textContent = `Current stock: ${item.Qty} ${item.Unit} · Min level: ${item.MinQty} ${item.Unit}`;
+  const items = stock.filter(s => s.Item === itemName && !s._catalogue);
+  const catalogueRow = stock.find(s => s.Item === itemName);
+  const hint = document.getElementById('as-item-hint');
+  if (catalogueRow) {
+    const totalQty = stock.filter(s => s.Item === itemName).reduce((a, s) => a + parseInt(s.Qty||0), 0);
+    hint.textContent = `Total stock: ${totalQty} ${catalogueRow.Unit} · Min level: ${catalogueRow.MinQty} ${catalogueRow.Unit}`;
   } else {
     hint.textContent = '';
   }
@@ -1446,30 +1529,85 @@ function submitNewItem() {
   renderAdd();
 }
  
-function submitAddStock() {
-  const itemName   = document.getElementById('as-item').value;
-  const qty        = document.getElementById('as-qty').value.trim();
-  const batchno    = document.getElementById('as-batchno').value.trim();
-  const restockdate= document.getElementById('as-restockdate').value.trim();
-  const expirydate = document.getElementById('as-expirydate').value.trim();
-  const expirywarn = document.getElementById('as-expirywarn').value.trim();
+function validateYYYYMM(val) {
+  if (!val || val.length !== 6) return false;
+  const yr = parseInt(val.slice(0,4)), mo = parseInt(val.slice(4,6));
+  return yr >= 2000 && yr <= 2100 && mo >= 1 && mo <= 12;
+}
  
-  if (!itemName) { document.getElementById('as-item').classList.add('error'); showToast('Please select an item.'); return; }
-  if (!qty || parseInt(qty) < 1) { document.getElementById('as-qty').classList.add('error'); showToast('Please enter a valid quantity.'); return; }
+function yyyymmToIso(val) {
+  // Treat as first of month for backend comparison
+  return `${val.slice(0,4)}-${val.slice(4,6)}-01`;
+}
+ 
+function submitAddStock() {
+  const itemName    = document.getElementById('as-item-value').value.trim();
+  const itemDisplay = document.getElementById('as-item-input').value.trim();
+  const qty         = document.getElementById('as-qty').value.trim();
+  const batchno     = document.getElementById('as-batchno').value.trim();
+  const restockdate = document.getElementById('as-restockdate').value.trim();
+  const expiryRaw   = document.getElementById('as-expirydate').value.trim();
+  const expirywarn  = document.getElementById('as-expirywarn').value.trim();
+  const staffName   = document.getElementById('as-staff').value.trim();
+ 
+  let valid = true;
+  if (!itemName) {
+    document.getElementById('as-item-input').classList.add('error');
+    showToast('Please select an item from the list.'); valid = false;
+  } else document.getElementById('as-item-input').classList.remove('error');
+ 
+  if (!qty || parseInt(qty) < 1) {
+    document.getElementById('as-qty').classList.add('error'); valid = false;
+  } else document.getElementById('as-qty').classList.remove('error');
+ 
+  if (!batchno) {
+    document.getElementById('as-batchno').classList.add('error'); valid = false;
+  } else document.getElementById('as-batchno').classList.remove('error');
+ 
+  if (!restockdate) {
+    document.getElementById('as-restockdate').classList.add('error'); valid = false;
+  } else document.getElementById('as-restockdate').classList.remove('error');
+ 
+  if (!validateYYYYMM(expiryRaw)) {
+    document.getElementById('as-expirydate').classList.add('error');
+    showToast('Expiry date must be in YYYYMM format (e.g. 202512).'); valid = false;
+  } else document.getElementById('as-expirydate').classList.remove('error');
+ 
+  if (!staffName) {
+    document.getElementById('as-staff').classList.add('error'); valid = false;
+  } else document.getElementById('as-staff').classList.remove('error');
+ 
+  if (!valid) { showToast('Please fill in all required fields.'); return; }
  
   const stock = loadStock();
-  const idx   = stock.findIndex(s => s.Item === itemName);
-  if (idx === -1) { showToast('Item not found.'); return; }
+  // Find catalogue row to inherit MinQty, Unit, ExpiryWarnDays
+  const catalogueRow = stock.find(s => s.Item === itemName);
+  if (!catalogueRow) { showToast('Item not found in catalogue.'); return; }
  
-  stock[idx].Qty          = parseInt(stock[idx].Qty) + parseInt(qty);
-  stock[idx].BatchNo      = batchno    || stock[idx].BatchNo;
-  stock[idx].BatchDate    = restockdate || stock[idx].BatchDate;
-  stock[idx].ExpiryDate   = expirydate || stock[idx].ExpiryDate;
-  if (expirywarn) stock[idx].ExpiryWarnDays = parseInt(expirywarn);
-  stock[idx].LastUpdated  = today();
+  const expiryIso = yyyymmToIso(expiryRaw);
  
-  saveStock(stock);
-  showToast(`✅ Added ${qty} ${stock[idx].Unit} of "${itemName}"`);
+  // New row for this batch (separate from catalogue placeholder)
+  const newBatch = {
+    Item:          itemName,
+    Category:      catalogueRow.Category,
+    Qty:           parseInt(qty),
+    MinQty:        catalogueRow.MinQty,
+    Unit:          catalogueRow.Unit,
+    BatchNo:       batchno,
+    BatchDate:     restockdate,
+    ExpiryDate:    expiryIso,
+    ExpiryDisplay: expiryRaw,   // store YYYYMM for display
+    ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : (catalogueRow.ExpiryWarnDays || 90),
+    LastUpdated:   today(),
+    LastUpdatedBy: staffName,
+    _catalogue:    false
+  };
+ 
+  // Remove the placeholder zero-qty catalogue row if it exists (qty 0 + _catalogue flag)
+  const filteredStock = stock.filter(s => !(s.Item === itemName && s._catalogue === true && parseInt(s.Qty) === 0));
+  filteredStock.push(newBatch);
+  saveStock(filteredStock);
+  showToast(`✅ Added ${qty} ${catalogueRow.Unit} of "${itemName}"`);
   showView('stock');
 }
  
@@ -1477,7 +1615,8 @@ function submitAddStock() {
  
 // ── Stock Take ─────────────────────────────────────────────────────────────
 let stockTakeEntries = [];
-let stockTakeChecked = []; // tracks "marked as updated" per original index
+let stockTakeChecked = [];  // true = reviewed (done pressed)
+let stockTakeDeleted = [];  // true = marked for deletion
  
 function renderStockTake() {
   let stock = loadStock();
@@ -1489,7 +1628,7 @@ function renderStockTake() {
       <button class="btn btn-primary" onclick="openStaffModal()">💾 Save Stock Take</button>
     </div>
     <div class="alert alert-info">
-      📝 Enter the new counts for items you have checked. Changed counts are highlighted in <span style="color:#3B5BDB;font-weight:600;">blue</span>. Press <strong>✓ Done</strong> on each row to mark it as reviewed — reviewed rows turn <span style="color:#666;font-weight:600;">grey</span>.
+      📝 Enter the new counts for items you have checked. Press <strong>✓ Done</strong> once a row has been reviewed. Use <strong>🗑 Delete</strong> to mark a batch for removal — it will be recorded in the saved report.
     </div>
     <div class="filters-bar">
       <div class="search-wrap">
@@ -1506,14 +1645,19 @@ function renderStockTake() {
     </div>
   `;
  
-  // Init entries and checked state
   stockTakeEntries = stock.map(() => '');
   stockTakeChecked = stock.map(() => false);
+  stockTakeDeleted = stock.map(() => false);
   renderStockTakeTable();
 }
  
 function toggleStockTakeChecked(oi) {
   stockTakeChecked[oi] = !stockTakeChecked[oi];
+  renderStockTakeTable();
+}
+ 
+function toggleStockTakeDelete(oi) {
+  stockTakeDeleted[oi] = !stockTakeDeleted[oi];
   renderStockTakeTable();
 }
  
@@ -1543,10 +1687,12 @@ function renderStockTakeTable() {
         <tr>
           ${thHtml('Item', 'Item', 'stocktake')}
           ${thHtml('Category', 'Category', 'stocktake')}
+          ${thHtml('Batch No', 'BatchNo', 'stocktake')}
           ${thHtml('Current Qty', 'Qty', 'stocktake')}
           <th>Unit</th>
           <th>New Count</th>
-          <th>Status</th>
+          <th>Review</th>
+          <th>Delete</th>
         </tr>
       </thead>
       <tbody>
@@ -1555,27 +1701,42 @@ function renderStockTakeTable() {
           const val     = stockTakeEntries[oi] || '';
           const changed = val !== '' && parseInt(val) !== parseInt(s.Qty);
           const checked = stockTakeChecked[oi];
-          // checked (grey) takes priority over changed (blue)
-          const rowCls  = checked ? 'updated-row' : changed ? 'changed-row' : '';
-          const btnLabel = checked ? '↩ Undo' : '✓ Done';
-          const btnStyle = checked
-            ? 'background:#9CA3AF;color:#fff;'
-            : 'background:#E5E7EB;color:#374151;';
+          const deleted = stockTakeDeleted[oi];
+ 
+          // Deleted takes priority visually
+          let rowCls = '';
+          if (deleted)      rowCls = 'deleted-row';
+          else if (checked) rowCls = 'updated-row';
+          else if (changed) rowCls = 'changed-row';
+ 
+          const doneStyle = checked
+            ? 'background:#2E7D32;color:#fff;'   // green when done
+            : 'background:#E5E7EB;color:#374151;'; // grey default
+          const delStyle = deleted
+            ? 'background:#DC2626;color:#fff;'
+            : 'background:#FEE2E2;color:#DC2626;';
+ 
           return `<tr class="${rowCls}">
             <td><strong>${escHtml(s.Item)}</strong></td>
             <td>${escHtml(s.Category)}</td>
+            <td class="text-muted">${escHtml(s.BatchNo || '—')}</td>
             <td class="qty-cell">${escHtml(s.Qty)}</td>
             <td class="text-muted">${escHtml(s.Unit)}</td>
             <td>
+              ${deleted ? '<span style="font-size:13px;color:#DC2626;">—</span>' : `
               <input type="number" min="0"
                 value="${escHtml(val)}"
                 placeholder="—"
                 onchange="stockTakeEntries[${oi}] = this.value; renderStockTakeTable()"
-                oninput="stockTakeEntries[${oi}] = this.value;">
+                oninput="stockTakeEntries[${oi}] = this.value;">`}
             </td>
             <td>
-              <button class="btn-icon" style="${btnStyle}border-radius:6px;font-size:13px;font-weight:600;padding:7px 12px;border:none;cursor:pointer;"
-                onclick="toggleStockTakeChecked(${oi})">${btnLabel}</button>
+              <button class="btn-icon" style="${doneStyle}border-radius:6px;font-size:13px;font-weight:600;padding:7px 12px;border:none;cursor:pointer;${deleted ? 'opacity:0.4;pointer-events:none;' : ''}"
+                onclick="toggleStockTakeChecked(${oi})">✓ Done</button>
+            </td>
+            <td>
+              <button class="btn-icon" style="${delStyle}border-radius:6px;font-size:13px;font-weight:600;padding:7px 12px;border:none;cursor:pointer;"
+                onclick="toggleStockTakeDelete(${oi})">${deleted ? '↩ Undo' : '🗑'}</button>
             </td>
           </tr>`;
         }).join('')}
@@ -1605,29 +1766,42 @@ function confirmStaffAndSave() {
 }
  
 function saveStockTake(staffName) {
-  const stock = loadStock();
+  const stock   = loadStock();
   const changes = [];
-  let updated = 0;
+  const stamp   = new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore' });
+  let updated   = 0;
  
+  // Process qty changes
   stock.forEach((s, i) => {
     const val = stockTakeEntries[i];
+    if (stockTakeDeleted[i]) return; // handled below
     if (val !== '' && val !== null && val !== undefined) {
       const newQty = parseInt(val);
-      if (!isNaN(newQty)) {
+      if (!isNaN(newQty) && newQty !== parseInt(s.Qty)) {
         changes.push({
-          Item: s.Item,
-          Category: s.Category,
-          PreviousQty: s.Qty,
-          NewQty: newQty,
-          Unit: s.Unit,
-          UpdatedBy: staffName,
-          UpdatedAt: new Date().toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })
+          Item: s.Item, Category: s.Category, BatchNo: s.BatchNo || '—',
+          PreviousQty: s.Qty, NewQty: newQty, Unit: s.Unit,
+          ChangeType: 'Updated', UpdatedBy: staffName, UpdatedAt: stamp
         });
         s.Qty = newQty;
-        s.LastUpdated = today();
+        s.LastUpdated   = today();
         s.LastUpdatedBy = staffName;
         updated++;
       }
+    }
+  });
+ 
+  // Process deletions
+  const deletedItems = [];
+  stock.forEach((s, i) => {
+    if (stockTakeDeleted[i]) {
+      changes.push({
+        Item: s.Item, Category: s.Category, BatchNo: s.BatchNo || '—',
+        PreviousQty: s.Qty, NewQty: 0, Unit: s.Unit,
+        ChangeType: 'Deleted', UpdatedBy: staffName, UpdatedAt: stamp
+      });
+      deletedItems.push(i);
+      updated++;
     }
   });
  
@@ -1636,22 +1810,33 @@ function saveStockTake(staffName) {
     return;
   }
  
-  saveStock(stock);
-  stockTakeEntries = stock.map(() => '');
+  // Remove deleted rows (in reverse order to preserve indices)
+  const finalStock = stock.filter((_, i) => !stockTakeDeleted[i]);
  
-  // File 1 (Changes folder): what changed during this stock take
-  const changesCsv  = toCSV(changes, ['Item','Category','PreviousQty','NewQty','Unit','UpdatedBy','UpdatedAt']);
-  // File 2 (Stock Take folder): the full updated stock snapshot after this stock take
-  const snapCsv     = toCSV(stock,   ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']);
+  // Re-add catalogue placeholder rows for any item that now has no batches left
+  const itemsWithStock = new Set(finalStock.map(s => s.Item));
+  const allItems       = new Set(stock.map(s => s.Item));
+  allItems.forEach(itemName => {
+    if (!itemsWithStock.has(itemName)) {
+      // Item fully deleted — record no placeholder (fully gone)
+    }
+  });
  
-  const stamp       = nowStamp();
+  // Save updated stock
+  saveStock(finalStock);
+  stockTakeEntries = finalStock.map(() => '');
+  stockTakeChecked = finalStock.map(() => false);
+  stockTakeDeleted = finalStock.map(() => false);
+ 
+  // Generate CSVs
+  const changesCsv = toCSV(changes, ['Item','Category','BatchNo','PreviousQty','NewQty','Unit','ChangeType','UpdatedBy','UpdatedAt']);
+  const snapCsv    = toCSV(finalStock, ['Item','Category','Qty','MinQty','Unit','BatchNo','BatchDate','ExpiryDate','ExpiryWarnDays','LastUpdated','LastUpdatedBy']);
+ 
   const safeName    = staffName.replace(/\s+/g, '_');
-  const changesName = `changes_${stamp}_${safeName}.csv`;
-  const snapName    = `stocktake_${stamp}_${safeName}.csv`;
- 
-  downloadCSV(changesCsv, changesName);
-  downloadCSV(snapCsv,    snapName);
-  showToast(`✅ ${updated} item(s) saved — 2 CSVs downloaded`);
+  const ts          = nowStamp();
+  downloadCSV(changesCsv, `changes_${ts}_${safeName}.csv`);
+  downloadCSV(snapCsv,    `stocktake_${ts}_${safeName}.csv`);
+  showToast(`✅ ${updated} change(s) saved — 2 CSVs downloaded`);
   showView('stock');
 }
  
@@ -1724,8 +1909,8 @@ function renderRestockTable() {
       MinQty:     s.MinQty,
       Have:       `${s.Qty} ${s.Unit}`,
       'Need (Min)': `${s.MinQty} ${s.Unit}`,
-      'Order Qty':  isLow ? `${parseInt(s.MinQty) - parseInt(s.Qty)} ${s.Unit}` : '—',
-      ExpiryDate: s.ExpiryDate || '',
+      ExpiryDate:    s.ExpiryDate    || '',
+      ExpiryDisplay: s.ExpiryDisplay || (s.ExpiryDate ? s.ExpiryDate.replace(/-/g,'').slice(0,6) : ''),
       BatchDate:  s.BatchDate  || '',
       ExpiryWarnDays: s.ExpiryWarnDays,
       _isLow:       isLow,
@@ -1764,7 +1949,7 @@ function renderRestockTable() {
           ${thHtml('Item', 'Item', 'restock')}
           ${thHtml('Category', 'Category', 'restock')}
           <th>Issue</th>
-          ${showStockCols  ? `<th>Have</th><th>Need (Min)</th><th>Order Qty</th>` : ''}
+          ${showStockCols  ? `<th>Have</th><th>Need (Min)</th>` : ''}
           ${showExpiryCols ? `${thHtml('Expiry Date','ExpiryDate','restock')}<th>Expires In</th>` : ''}
         </tr>
       </thead>
@@ -1786,10 +1971,9 @@ function renderRestockTable() {
             ${showStockCols ? `
               <td class="qty-cell qty-low">${escHtml(r.Have)}</td>
               <td>${escHtml(r['Need (Min)'])}</td>
-              <td><strong>${r._isLow ? escHtml(r['Order Qty']) : '—'}</strong></td>
             ` : ''}
             ${showExpiryCols ? `
-              <td class="text-muted">${escHtml(r.ExpiryDate || '—')}</td>
+              <td class="text-muted">${escHtml(r.ExpiryDisplay || r.ExpiryDate || '—')}</td>
               <td>${r.ExpiryDate ? `<span class="badge ${expiryDaysCls}">${expiryDaysTxt}</span>` : '<span class="text-muted">—</span>'}</td>
             ` : ''}
           </tr>`;
@@ -1813,7 +1997,9 @@ function openEditModal(idx) {
   document.getElementById('edit-unit').value      = s.Unit;
   document.getElementById('edit-batchno').value   = s.BatchNo    || '';
   document.getElementById('edit-batchdate').value = s.BatchDate  || '';
-  document.getElementById('edit-expirydate').value= s.ExpiryDate || '';
+  // Show YYYYMM display format
+  const expDisp = s.ExpiryDisplay || (s.ExpiryDate ? s.ExpiryDate.replace(/-/g,'').slice(0,6) : '');
+  document.getElementById('edit-expirydate').value= expDisp;
   document.getElementById('edit-expirywarn').value= s.ExpiryWarnDays || 90;
   document.getElementById('edit-modal').classList.remove('hidden');
 }
@@ -1837,6 +2023,9 @@ function saveEdit() {
   if (!item || !cat || isNaN(qty) || isNaN(minqty) || !unit) {
     showToast('Please fill in all required fields.'); return;
   }
+  if (expirydate && !validateYYYYMM(expirydate)) {
+    showToast('Expiry date must be in YYYYMM format (e.g. 202512).'); return;
+  }
  
   const stock = loadStock();
   stock[editIdx] = {
@@ -1844,7 +2033,8 @@ function saveEdit() {
     Item: item, Category: cat, Qty: qty, MinQty: minqty, Unit: unit,
     BatchNo:       batchno   || '',
     BatchDate:     batchdate  || '',
-    ExpiryDate:    expirydate || '',
+    ExpiryDate:    expirydate ? yyyymmToIso(expirydate) : '',
+    ExpiryDisplay: expirydate || '',
     ExpiryWarnDays: expirywarn ? parseInt(expirywarn) : 90,
     LastUpdated: today()
   };
@@ -2239,8 +2429,3 @@ if ('serviceWorker' in navigator) {
 </body>
 </html>
  
-
-
-
-
-
